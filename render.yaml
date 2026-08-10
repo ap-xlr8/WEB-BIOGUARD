@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: bioguard-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /web-health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: API_UPSTREAM
+        value: https://bioguard-api-lkvnq.ondigitalocean.app

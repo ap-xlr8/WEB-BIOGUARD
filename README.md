@@ -1,120 +1,76 @@
-# 🌐 BioGuard — Plataforma Web Frontend
+# BioGuard Web
 
-BioGuard Web es la consola administrativa y de monitoreo centralizada en tiempo real diseñada para dueños de pacientes, profesionales de la salud y cuidadores. Esta aplicación cliente React basada en Vite se conecta de forma segura a la API REST del backend BioGuard para ofrecer visualización biométrica, gestión de alertas, asignación de cuidadores y control de suscripciones.
+Consola web de monitoreo histórico y administración de BioGuard. La Web consulta datos que la aplicación móvil ya sincronizó con el backend; no recibe telemetría directamente del wearable.
 
----
+## Topología de entornos
 
-## 🚀 Tecnologías Principales
+| Componente | Entorno actual | Destino |
+|---|---|---|
+| Backend derivado | Pruebas antes de integrar al original | Render |
+| Backend original | Producción | DigitalOcean |
+| Aplicación móvil | Distribución temporal por APK | Backend original en DigitalOcean |
+| Wearable | Distribución temporal por APK | Solo Móvil mediante Bluetooth |
+| Web | Pendiente de despliegue | Render |
 
-* **Core**: React 18, TypeScript, Vite.
-* **Estilos**: Vanilla CSS con diseño responsivo, temas oscuros y componentes modernos.
-* **Enrutamiento**: React Router DOM v6.
-* **Cliente HTTP**: Axios con interceptores JWT y cancelación de peticiones con `AbortController`.
-* **Procesamiento de Pagos**: Stripe JS (`@stripe/stripe-js`, `@stripe/react-stripe-js`).
-* **Visualización de Datos**: Recharts / Chart.js para gráficas biométricas en tiempo real e históricas.
-* **Manejo de Errores**: React ErrorBoundary global y estados de fallo asíncronos controlados.
+Por defecto, el contenedor de la Web dirige `/api`, `/health` y `/hubs` al backend original de DigitalOcean. Para desplegar una instancia Web de pruebas contra el backend derivado, se cambia únicamente `API_UPSTREAM` en Render. No se modifica el código ni la configuración de la aplicación móvil.
 
----
+## Requisitos
 
-## 🛠️ Requisitos Previos e Instalación
+- Node.js 24
+- npm compatible con el lockfile
+- Chromium de Playwright para pruebas E2E
+- Docker únicamente para construir o ejecutar el contenedor
 
-### Prerrequisitos
-* Node.js v18.0 o superior
-* npm v9.0 o superior
+## Desarrollo local
 
-### Instalación
+```bash
+npm ci
+npm run dev
+```
 
-1. Clonar el repositorio y navegar al directorio del frontend:
-   ```bash
-   cd FrontendWebBioGuard
-   ```
+Vite publica la aplicación en `http://localhost:5173` y usa el proxy local definido en `vite.config.ts`. `VITE_API_URL` puede establecerse para apuntar directamente a un backend concreto, pero nunca debe contener secretos.
 
-2. Instalar las dependencias del proyecto:
-   ```bash
-   npm install
-   ```
+## Validación
 
----
+```bash
+npm run lint -- --max-warnings=0
+npm run test:coverage
+npm run test:e2e
+npm run build
+npm audit --audit-level=moderate
+```
 
-## ⚙️ Variables de Entorno
+## Despliegue Web en Render
 
-Crea un archivo `.env` en la raíz del directorio `FrontendWebBioGuard/` tomando como base el archivo `.env.example`:
+El repositorio incluye `render.yaml` y un contenedor multi-stage. El servicio escucha en el puerto `8080`, expone `/web-health` para comprobar exclusivamente el frontend y conserva `/health` para consultar el backend desde la vista de estado.
+
+Variables del servicio:
 
 ```env
-# URL Base de la API REST del Backend (Producción / Desarrollo)
-VITE_API_URL=https://bioguard-api-lkvnq.ondigitalocean.app
-
-# Clave Pública de Stripe para Procesamiento de Pagos
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_sample_key_here
+PORT=8080
+API_UPSTREAM=https://bioguard-api-lkvnq.ondigitalocean.app
 ```
 
-> ⚠️ **Seguridad**: Nunca incluyas claves secretas del servidor (`STRIPE_SECRET_KEY`, cadenas de conexión de base de datos) en este repositorio. Las variables con prefijo `VITE_` son expuestas públicamente en el cliente por diseño.
+Para un Web preview conectado al backend de pruebas en Render:
 
----
-
-## 📜 Scripts Disponibles
-
-En el directorio del proyecto puedes ejecutar:
-
-* `npm run dev`: Inicia el servidor de desarrollo local con Vite (por defecto en `http://localhost:5173`).
-* `npm run build`: Compila el código TypeScript y genera el bundle optimizado para producción en la carpeta `dist/`.
-* `npm run preview`: Previsualiza localmente el build de producción generado.
-* `npx tsc --noEmit`: Ejecuta la verificación estática de tipos TypeScript sin emitir archivos.
-
----
-
-## 📂 Arquitectura del Proyecto
-
-```
-FrontendWebBioGuard/
-├── public/                  # Archivos estáticos y favicon
-├── src/
-│   ├── assets/              # Imágenes, íconos y logotipos
-│   ├── components/          # Componentes reutilizables (Navbar, Sidebar, ErrorBoundary, Modal)
-│   ├── constants/           # Constantes globales y rutas base de la API
-│   ├── context/             # AuthContext y proveedores de estado global
-│   ├── pages/               # Vistas principales de la aplicación
-│   │   ├── app/             # Vistas protegidas (Dashboard, Salud, Seguridad, Ajustes)
-│   │   ├── auth/            # Autenticación (Login, Registro, Recuperación)
-│   │   └── public/          # Páginas públicas (Landing, Licenciamientos, Checkout)
-│   ├── services/            # Clientes de API REST (pacienteService, sensorService, etc.)
-│   ├── types/               # Definiciones de Interfaces y DTOs TypeScript
-│   ├── utils/               # Axios httpClient, sanitizadores y formateadores
-│   ├── App.tsx              # Configuración de rutas principales y ErrorBoundary
-│   └── main.tsx             # Punto de entrada de la aplicación React
-├── index.html               # Plantilla HTML5
-├── vite.config.ts           # Configuración del empaquetador Vite
-└── package.json             # Dependencias y scripts
+```env
+API_UPSTREAM=https://NOMBRE-DEL-BACKEND-DE-PRUEBAS.onrender.com
 ```
 
----
+El navegador siempre llama al mismo origen de la Web. Nginx realiza el proxy hacia el backend elegido, lo que simplifica CORS y permite una CSP `connect-src 'self'`.
 
-## 📡 Endpoints de API Consumidos
+La publicación automática usa `checksPass`: Render solo debe desplegar después de que CI haya aprobado lint, pruebas, build y controles configurados en GitHub.
 
-La aplicación web interactúa con los siguientes controladores principales de la API Backend:
+## Variables Vite
 
-* **`/api/Auth`**: Inicio de sesión (`/login-web`), registro de dueños (`/register`) y revocación de sesión (`/logout`).
-* **`/api/UsuariosWeb`**: Gestión de perfil de usuario y configuración de cuenta.
-* **`/api/Pacientes`**: Consulta de expedientes, registro de nuevos pacientes y vinculación.
-* **`/api/Sensores`**: Lecturas en tiempo real y resúmenes estadísticos de biomarcadores (PPG, SpO2, HRV, Temperatura, Sudoración).
-* **`/api/Alertas`**: Monitoreo de alertas metabólicas, filtro por estado y resolución de emergencias.
-* **`/api/Cuidadores`**: Asignación de cuidadores secundarios y actualización de niveles de permiso (`PATCH /nivel-acceso`).
-* **`/api/Planes` & `/api/Pagos`**: Consulta de suscripciones y checkout mediante Stripe Webhooks.
+`VITE_API_URL` queda vacío en el contenedor para usar el proxy same-origin. `VITE_APP_URL` se reserva para la URL pública final y `VITE_STRIPE_PUBLIC_KEY` solo admite una clave publicable. Ninguna credencial privada debe incluirse en variables `VITE_*` porque forman parte del bundle público.
 
----
+## Seguridad y operación
 
-## 🔒 Seguridad e Integridad
+- El access token se mantiene en memoria y el refresh depende de cookie segura emitida por el backend.
+- Nginx agrega CSP, HSTS, protección contra framing, `nosniff` y políticas restrictivas.
+- La API debe permitir el origen final de Render si alguna integración evita el proxy.
+- El dominio final debe agregarse a redirect URLs, cookies y configuración Stripe del backend original.
+- Las APK deben estar firmadas, versionadas y distribuirse con SHA-256 publicado por un canal autenticado hasta migrar a Google Play.
 
-1. **Tokens JWT**: El token JWT se almacena de forma segura y se inyecta en cada cabecera HTTP a través de interceptores Axios (`Authorization: Bearer <token>`).
-2. **Cancelación de Peticiones**: Los efectos `useEffect` de las vistas protegidas utilizan `AbortController` para abortar peticiones al desmontar la vista o actualizar filtros.
-3. **Manejo de Errores UX**: Excepciones capturadas mediante el componente `ErrorBoundary`, evitando pantallas en blanco o mensajes de error numéricos crudos.
-
----
-
-## 🚢 Despliegue en Producción
-
-El proyecto está preparado para desplegarse en plataformas como **DigitalOcean App Platform**, **Vercel** o **Netlify**:
-
-1. Asegúrate de configurar la variable de entorno `VITE_API_URL` apuntando a `https://bioguard-api-lkvnq.ondigitalocean.app`.
-2. Ejecuta el comando de construcción: `npm run build`.
-3. Sirve la carpeta resultante `dist/` a través de tu servidor web (Nginx / Apache / CDN) redireccionando todas las rutas de SPA a `index.html`.
+Consulta [DOCUMENTACION_FRONTEND_WEB.md](./DOCUMENTACION_FRONTEND_WEB.md) y [AUDITORIA_CUMPLIMIENTO_FRONTEND_WEB_2026-08-09.md](./AUDITORIA_CUMPLIMIENTO_FRONTEND_WEB_2026-08-09.md) para arquitectura, pruebas y bloqueadores de liberación.

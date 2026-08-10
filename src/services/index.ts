@@ -4,3 +4,5 @@ export { pacienteService } from './pacienteService';
 export { sensorService, reporteService, mlService } from './sensorService';
 export { usuarioService } from './usuarioService';
 export { cuidadorService } from './cuidadorService';
+export { medicamentoService } from './medicamentoService';
+export { pushNotificationService } from './pushNotificationService';

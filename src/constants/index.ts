@@ -6,6 +6,9 @@ export const ROUTES = {
   LOGIN: '/login',
   REGISTRO: '/registro',
   CONFIRMAR_CORREO: '/confirmar-correo',
+  RECUPERAR_PASSWORD: '/recuperar-password',
+  RESET_PASSWORD: '/reset-password',
+  DOS_FACTOR: '/login-2fa',
   CHECKOUT: '/checkout',
   CONFIGURACION_COMPLETADA: '/configuracion-completada',
   PAGO_EXITO: '/pago/exito',
@@ -15,46 +18,20 @@ export const ROUTES = {
   SEGURIDAD: '/seguridad',
   FACTURACION: '/facturacion',
   AJUSTES: '/ajustes',
+  SOPORTE: '/soporte',
+  ADMIN_DASHBOARD: '/admin/dashboard',
+  ADMIN_USUARIOS: '/admin/usuarios',
+  ADMIN_TICKETS: '/admin/tickets',
+  CARACTERISTICAS: '/caracteristicas',
+  FAQ: '/faq',
+  CONTACTO: '/contacto',
+  NOSOTROS: '/nosotros',
+  BLOG: '/blog',
+  STATUS: '/status',
+  TERMINOS: '/terminos',
+  PRIVACIDAD: '/privacidad',
+  COOKIES: '/cookies',
+  AVISO_LEGAL: '/aviso-legal',
 } as const;
 
-export const TOKEN_KEY = 'bioguard_token';
-export const REFRESH_TOKEN_KEY = 'bioguard_refresh_token';
 export const USER_KEY = 'bioguard_user';
-
-export const PLAN_FEATURES: Record<string, string[]> = {
-  Gratis: [
-    '1 paciente monitoreado',
-    '1 cuidador autorizado',
-    'Historial de 7 días',
-    'Alertas básicas',
-    'Notificaciones push',
-  ],
-  Familiar: [
-    '1 paciente monitoreado',
-    '3 cuidadores autorizados',
-    'Historial de 30 días',
-    'GPS continuo',
-    'Alertas avanzadas',
-    'Notificaciones push',
-    'Soporte prioritario',
-  ],
-  Pro: [
-    '1 paciente monitoreado',
-    '5 cuidadores autorizados',
-    'Historial de 90 días',
-    'GPS continuo',
-    'Consola IA avanzada',
-    'Predicciones metabólicas',
-    'Reportes descargables',
-    'Alertas inteligentes',
-    'Notificaciones push',
-    'Soporte 24/7',
-  ],
-};
-
-export const PERIOD_LABELS: Record<string, string> = {
-  mensual: '/mes',
-  anual: '/año',
-};
-
-export const ANNUAL_DISCOUNT = 0.15; // 15% off for annual billing

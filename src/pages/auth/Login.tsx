@@ -4,13 +4,13 @@ import { Mail, Lock } from 'lucide-react';
 import { Button, Input, LoadingSpinner } from '../../components/ui';
 import { AuthLayout } from '../../components/layout';
 import { useAuth } from '../../context';
-import { authService } from '../../services';
-import { ROUTES, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../../constants';
+import { ROUTES } from '../../constants';
 import { LoginWebRequest } from '../../types';
 import styles from './Auth.module.css';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function LoginPage() {
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, isAuthenticated, isLoading, user } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const code = searchParams.get('code');
@@ -22,23 +22,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(ROUTES.DASHBOARD, { replace: true });
+      navigate(user?.rol === 'administrador' ? ROUTES.ADMIN_DASHBOARD : ROUTES.DASHBOARD, { replace: true });
       return;
     }
     if (!code) return;
-    (async () => {
-      try {
-        const res = await authService.loginCodigo(code);
-        localStorage.setItem(TOKEN_KEY, res.accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken);
-        localStorage.setItem(USER_KEY, JSON.stringify({ token: res.accessToken, userId: res.userId, nombre: res.nombre, rol: res.rol, plan: '' }));
-        navigate(ROUTES.DASHBOARD, { replace: true });
-      } catch {
-        setCodeLogging(false);
-        setApiError('Código QR inválido o expirado');
-      }
-    })();
-  }, [code, isAuthenticated, navigate]);
+    setCodeLogging(false);
+    setApiError('El código QR de paciente se utiliza exclusivamente en la aplicación móvil.');
+  }, [code, isAuthenticated, navigate, user?.rol]);
 
   if (isLoading || codeLogging) return <LoadingSpinner />;
   if (isAuthenticated) return null;
@@ -63,16 +53,16 @@ export default function LoginPage() {
         navigate(`${ROUTES.CONFIRMAR_CORREO}?correo=${encodeURIComponent(form.correo)}&mode=2fa`, { replace: true });
         return;
       }
-      navigate(ROUTES.DASHBOARD, { replace: true });
-    } catch (err: any) {
-      setApiError(err?.message || 'Credenciales incorrectas');
+      navigate(res.rol === 'administrador' ? ROUTES.ADMIN_DASHBOARD : ROUTES.DASHBOARD, { replace: true });
+    } catch (err: unknown) {
+      setApiError(getErrorMessage(err, 'Credenciales incorrectas'));
       setSubmitting(false);
     }
   };
 
   return (
     <AuthLayout title="Bienvenido" subtitle="Ingresa tus credenciales para acceder al panel">
-      <form className={styles.form} onSubmit={handleSubmit} noValidate autoComplete="off">
+      <form className={styles.form} onSubmit={handleSubmit} noValidate>
         {apiError && <div className={styles.errorBox}>{apiError}</div>}
 
         <Input
@@ -81,6 +71,10 @@ export default function LoginPage() {
           onChange={(e) => setForm({ ...form, correo: e.target.value })}
           error={errors.correo} autoComplete="username" name="email-field"
         />
+
+        <div style={{ textAlign: 'right', marginTop: -10 }}>
+          <Link to={ROUTES.RECUPERAR_PASSWORD}>¿Olvidaste tu contraseña?</Link>
+        </div>
 
         <Input
           label="Contraseña" type="password" placeholder="........"

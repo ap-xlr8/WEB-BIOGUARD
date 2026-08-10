@@ -1,145 +1,63 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Check, Sun, Moon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import { Logo } from '../../components/ui/Logo';
 import { Button, LoadingSpinner, EmptyState } from '../../components/ui';
-import { useTheme } from '../../context';
+import { PublicLayout } from '../../components/layout';
 import { planService } from '../../services';
-import { PlanResponse, BillingPeriod } from '../../types';
-import { ROUTES, PERIOD_LABELS, ANNUAL_DISCOUNT } from '../../constants';
+import { PlanResponse } from '../../types';
+import { ROUTES } from '../../constants';
 import styles from './Licenciamientos.module.css';
 
 export default function LicenciamientosPage() {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
   const [plans, setPlans] = useState<PlanResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<PlanResponse | null>(null);
-  const [period, setPeriod] = useState<BillingPeriod>('mensual');
-
-  const fallbackPlans: PlanResponse[] = [
-    {
-      id: 'plan_gratis',
-      nombre: 'Gratis',
-      precio: 0,
-      limitePacientes: 1,
-      limiteCuidadores: 1,
-      diasHistorial: 7,
-      gpsContinuo: false,
-      aiConsole: false,
-      activo: true
-    },
-    {
-      id: 'plan_familiar',
-      nombre: 'Familiar',
-      precio: 29,
-      limitePacientes: 1,
-      limiteCuidadores: 3,
-      diasHistorial: 30,
-      gpsContinuo: true,
-      aiConsole: false,
-      activo: true
-    },
-    {
-      id: 'plan_pro',
-      nombre: 'Pro',
-      precio: 79,
-      limitePacientes: 1,
-      limiteCuidadores: 5,
-      diasHistorial: 90,
-      gpsContinuo: true,
-      aiConsole: true,
-      activo: true
-    }
-  ];
 
   useEffect(() => {
     planService
       .listar()
       .then((data) => {
-        if (data && data.length > 0) {
-          setPlans(data);
-        } else {
-          setPlans(fallbackPlans);
-        }
+        setPlans(Array.isArray(data) ? data : []);
       })
       .catch(() => {
-        setPlans(fallbackPlans);
+        setError('No fue posible consultar los planes vigentes. Intenta nuevamente.');
+        setPlans([]);
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const getDisplayPrice = (plan: PlanResponse) => {
-    if (plan.nombre === 'Gratis') return 0;
-    if (period === 'anual') {
-      return Math.round(plan.precio * 12 * (1 - ANNUAL_DISCOUNT));
-    }
-    return plan.precio;
-  };
+  const getDisplayPrice = (plan: PlanResponse) => plan.nombre === 'Gratis' ? 0 : plan.precio;
 
   const handleContinue = () => {
     if (!selectedPlan) return;
-    navigate(ROUTES.CHECKOUT, { state: { plan: selectedPlan, period } });
+    navigate(ROUTES.CHECKOUT, { state: { plan: selectedPlan } });
   };
 
   return (
-    <div className={styles.page}>
-      <nav className={styles.nav}>
-        <Link to={ROUTES.HOME} className={styles.logo}>
-          BioGuard
-        </Link>
-        <div className={styles.navActions}>
-          <Link to={ROUTES.LOGIN}>
-            <Button variant="ghost" size="sm" style={{ border: '1px dashed var(--color-border-light)' }}>
-              Iniciar sesion
-            </Button>
-          </Link>
-          <button onClick={toggleTheme} className={styles.themeBtn}>
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-        </div>
-      </nav>
-
-      <main className={styles.main}>
+    <PublicLayout>
+      <div className={styles.licenciamientosContainer}>
         <div className={styles.hero}>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <Logo size={220} showText={false} />
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+            <Logo size={48} showText={false} />
           </div>
           <h1 className={styles.heroTitle}>
-            Bienvenido a la Élite de la
-          </h1>
-          <h1 className={styles.heroTitle}>
-            Bioseguridad
+            Planes de BioGuard
           </h1>
           <p className={styles.heroText}>
-            Tu salud y datos biomedicos protegidos bajo los protocolos mas estrictos del<br />
-            mundo. Selecciona el nivel de blindaje que mejor se adapte a tus necesidades.
+            Consulta los precios, límites y funciones publicados por el servicio de planes. No mostramos precios de respaldo ni información estimada.
           </p>
         </div>
 
-        <p className={styles.chooseTitle}>Elige tu nivel de proteccion</p>
-
-        <div className={styles.periodSwitch}>
-          <button
-            className={`${styles.periodBtn} ${period === 'mensual' ? styles.periodBtnActive : ''}`}
-            onClick={() => setPeriod('mensual')}
-          >
-            Mensual
-          </button>
-          <button
-            className={`${styles.periodBtn} ${period === 'anual' ? styles.periodBtnActive : ''}`}
-            onClick={() => setPeriod('anual')}
-          >
-            Anual (15% off)
-          </button>
-        </div>
+        <p className={styles.chooseTitle}>Elige tu nivel de protección</p>
 
         {loading && <LoadingSpinner />}
 
         {error && <div className={styles.errorBox}>{error}</div>}
 
-        {!loading && !error && plans.length === 0 && (
+        {!loading && plans.length === 0 && (
           <EmptyState title="No hay planes disponibles" description="Intenta de nuevo más tarde." />
         )}
 
@@ -173,7 +91,7 @@ export default function LicenciamientosPage() {
                       </span>
                       {price > 0 && (
                         <span className={styles.planPeriod}>
-                          {PERIOD_LABELS[period]}
+                          /mes
                         </span>
                       )}
                     </div>
@@ -221,7 +139,7 @@ export default function LicenciamientosPage() {
                 <div className={styles.summaryPrice}>
                   {getDisplayPrice(selectedPlan) === 0
                     ? 'Gratis'
-                    : `$${getDisplayPrice(selectedPlan)}${PERIOD_LABELS[period]}`}
+                    : `$${getDisplayPrice(selectedPlan)}/mes`}
                 </div>
                 <Button
                   size="lg"
@@ -234,7 +152,7 @@ export default function LicenciamientosPage() {
             )}
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </PublicLayout>
   );
 }

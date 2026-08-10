@@ -1,127 +1,77 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Check, Crown, User, Shield, ArrowRight } from 'lucide-react';
-import { LoadingSpinner } from '../../components/ui';
-import { usuarioService } from '../../services';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Check, ShieldCheck } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { Button, LoadingSpinner } from '../../components/ui';
+import { pacienteService, usuarioService } from '../../services';
 import { useAuth } from '../../context';
 import { ROUTES } from '../../constants';
-import { PlanResponse, UsuarioPerfilResponse } from '../../types';
+
+const QR_LOGIN_URL = 'bioguard://login?code=';
 
 export default function SetupCompletePage() {
   const { isAuthenticated, user } = useAuth();
-  const location = useLocation();
-  const state = location.state as any;
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<PlanResponse | null>(null);
-  const [perfil, setPerfil] = useState<UsuarioPerfilResponse | null>(null);
+  const [displayName, setDisplayName] = useState(user?.nombre || 'Usuario');
+  const [patientName, setPatientName] = useState('');
+  const [accessCode, setAccessCode] = useState('');
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    Promise.all([
-      usuarioService.miPlan().catch(() => null),
-      usuarioService.miPerfil().catch(() => null),
-    ]).then(([p, pf]) => {
-      setPlan(p);
-      setPerfil(pf);
-    }).finally(() => setLoading(false));
-  }, [isAuthenticated]);
+    if (!isAuthenticated) {
+      navigate(ROUTES.LOGIN, { replace: true });
+      return;
+    }
 
-  if (!isAuthenticated) {
-    return <Navigate to={ROUTES.LOGIN} replace />;
-  }
+    let active = true;
+    Promise.allSettled([usuarioService.miPerfil(), pacienteService.miPaciente()])
+      .then(async ([profileResult, patientResult]) => {
+        if (!active) return;
+        if (profileResult.status === 'fulfilled') setDisplayName(profileResult.value.nombre);
+        if (patientResult.status === 'fulfilled') {
+          setPatientName(patientResult.value.nombre);
+          const qr = await pacienteService.obtenerQR(patientResult.value.id);
+          if (active) setAccessCode(qr.codigoAccesoQr || '');
+        }
+      })
+      .catch(() => null)
+      .finally(() => active && setLoading(false));
+
+    return () => { active = false; };
+  }, [isAuthenticated, navigate]);
 
   if (loading) return <LoadingSpinner />;
 
-  const planName = state?.plan?.nombre || plan?.nombre || user?.plan || 'Gratis';
-  const planPrice = state?.plan?.precio || plan?.precio || 0;
-  const planMoneda = plan?.precioMoneda || 'MXN';
-  const planPacientes = plan?.limitePacientes || 1;
-  const planCuidadores = plan?.limiteCuidadores || 0;
-
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#07111D', padding: 24,
-    }}>
-      <div style={{
-        maxWidth: 480, width: '100%', background: '#111C2E',
-        border: '1px solid rgba(45,156,255,0.1)', borderRadius: 20, padding: 40,
-        textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-      }}>
-        <div style={{
-          width: 76, height: 76, borderRadius: '50%',
-          background: 'rgba(0,230,118,0.1)', border: '2px solid rgba(0,230,118,0.2)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 20px',
-        }}>
-          <Check size={36} style={{ color: '#00e676' }} />
+    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--color-bg-secondary)', padding: 24 }}>
+      <section style={{ maxWidth: 520, width: '100%', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 36, textAlign: 'center', boxShadow: 'var(--shadow-lg)' }} aria-labelledby="setup-title">
+        <div style={{ width: 54, height: 54, borderRadius: 8, background: 'var(--color-emerald-glow)', color: 'var(--color-emerald)', display: 'grid', placeItems: 'center', margin: '0 auto 18px' }}>
+          <Check size={26} aria-hidden="true" />
         </div>
-
-        <span style={{
-          fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: '0.1em', color: '#00e676', display: 'block', marginBottom: 8,
-        }}>
-          Sistema activado
-        </span>
-
-        <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#F5F7FA', marginBottom: 4 }}>
-          Configuración{' '}
-          <span style={{ color: '#2D9CFF' }}>Completada</span>
-        </h1>
-
-        <p style={{ color: '#8E9CB8', fontSize: '0.88rem', marginBottom: 24, lineHeight: 1.5, maxWidth: 360, margin: '0 auto 24px' }}>
-          Tu cuenta ha sido activada exitosamente con el plan{' '}
-          <strong style={{ color: '#2D9CFF' }}>{planName}</strong>.
+        <h1 id="setup-title" style={{ fontFamily: 'var(--font-display)', fontSize: '1.55rem', marginBottom: 8 }}>Configuración completada</h1>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 26 }}>
+          Hola, <strong>{displayName}</strong>. La vinculación del paciente se realiza con el código emitido por el backend.
         </p>
 
-        <div style={{
-          background: 'rgba(45,156,255,0.04)', borderRadius: 14, padding: 20,
-          marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 12,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8E9CB8', fontSize: '0.85rem' }}>
-              <Crown size={15} style={{ color: '#ffd740' }} /> Plan
-            </span>
-            <span style={{ fontWeight: 600, color: '#F5F7FA', fontSize: '0.9rem' }}>
-              {planName}
-              {planPrice > 0 && <span style={{ color: '#8E9CB8', fontSize: '0.8rem', marginLeft: 4 }}>· ${planPrice} {planMoneda}/mes</span>}
-            </span>
+        {accessCode ? (
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 24, maxWidth: 290, margin: '0 auto 26px' }}>
+            <QRCodeSVG value={`${QR_LOGIN_URL}${accessCode}`} size={174} level="H" title={`QR de acceso de ${patientName}`} />
+            <span style={{ display: 'block', marginTop: 14, color: 'var(--color-text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Código de acceso</span>
+            <strong style={{ display: 'block', marginTop: 4, color: 'var(--color-blue)', overflowWrap: 'anywhere' }}>{accessCode}</strong>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8E9CB8', fontSize: '0.85rem' }}>
-              <User size={15} /> Usuario
-            </span>
-            <span style={{ fontWeight: 500, color: '#F5F7FA', fontSize: '0.9rem' }}>
-              {perfil?.nombre || user?.nombre || 'Usuario'} {perfil?.apellidoPaterno || ''}
-            </span>
+        ) : (
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 20, marginBottom: 26, color: 'var(--color-text-secondary)', fontSize: '0.88rem' }}>
+            Aún no existe un paciente con código de acceso. Créalo desde el panel para generar un QR real.
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8E9CB8', fontSize: '0.85rem' }}>
-              <Shield size={15} /> Límites
-            </span>
-            <span style={{ fontWeight: 500, color: '#F5F7FA', fontSize: '0.9rem' }}>
-              {planPacientes} paciente{planPacientes !== 1 ? 's' : ''} · {planCuidadores} cuidadores
-            </span>
-          </div>
+        )}
+
+        <Button fullWidth size="lg" onClick={() => navigate(ROUTES.DASHBOARD)}>
+          Ir al panel <ArrowRight size={16} aria-hidden="true" style={{ marginLeft: 6 }} />
+        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 20, color: 'var(--color-text-muted)', fontSize: '0.76rem' }}>
+          <ShieldCheck size={14} aria-hidden="true" /> No se generan códigos aleatorios en el navegador
         </div>
-
-        <Link to={ROUTES.DASHBOARD} style={{ textDecoration: 'none' }}>
-          <button style={{
-            width: '100%', padding: '14px 24px',
-            background: 'linear-gradient(135deg, #2D9CFF, #8FD7FF)',
-            border: 'none', borderRadius: 12, color: '#07111D',
-            cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '0.95rem',
-            fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            transition: 'all 0.2s',
-          }}>
-            Ir al Dashboard <ArrowRight size={18} />
-          </button>
-        </Link>
-
-        <p style={{ fontSize: '0.8rem', color: '#5a6d8a', marginTop: 16 }}>
-          Puedes cambiar tu plan en <Link to={ROUTES.FACTURACION} style={{ color: '#2D9CFF' }}>Facturación</Link>
-        </p>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

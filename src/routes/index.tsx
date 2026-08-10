@@ -1,77 +1,184 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { lazy } from 'react';
+import { createBrowserRouter } from 'react-router-dom';
 import { ROUTES } from '../constants';
 import { AppLayout } from '../components/layout';
-import { ProtectedRoute } from './guards';
+import { ProtectedRoute, AdminRoute, PermissionRoute, PublicOnlyRoute } from './guards';
+import { APP_PERMISSIONS } from '../auth/authorization';
 
-import LicenciamientosPage from '../pages/public/Licenciamientos';
-import CheckoutPage from '../pages/public/Checkout';
-import SetupCompletePage from '../pages/public/SetupComplete';
-import PagoExitoPage from '../pages/public/PagoExito';
-import PagoCanceladoPage from '../pages/public/PagoCancelado';
-import LoginPage from '../pages/auth/Login';
-import RegisterPage from '../pages/auth/Register';
-import VerifyEmailPage from '../pages/auth/VerifyEmail';
-import DashboardPage from '../pages/app/Dashboard';
-import SaludPage from '../pages/app/Salud';
-import SeguridadPage from '../pages/app/Seguridad';
-import FacturacionPage from '../pages/app/Facturacion';
-import AjustesPage from '../pages/app/Ajustes';
+// Public pages
+const LandingPage = lazy(() => import('../pages/public/Landing'));
+const CaracteristicasPage = lazy(() => import('../pages/public/Caracteristicas'));
+const LicenciamientosPage = lazy(() => import('../pages/public/Licenciamientos'));
+const FAQPage = lazy(() => import('../pages/public/FAQ'));
+const ContactoPage = lazy(() => import('../pages/public/Contacto'));
+const NosotrosPage = lazy(() => import('../pages/public/Nosotros'));
+const BlogPage = lazy(() => import('../pages/public/Blog'));
+const StatusPage = lazy(() => import('../pages/public/Status'));
+const TerminosPage = lazy(() => import('../pages/public/Terminos'));
+const PrivacidadPage = lazy(() => import('../pages/public/Privacidad'));
+const CookiesPage = lazy(() => import('../pages/public/Cookies'));
+const AvisoLegalPage = lazy(() => import('../pages/public/AvisoLegal'));
+const NotFoundPage = lazy(() => import('../pages/public/NotFound'));
+
+// Auth pages
+const LoginPage = lazy(() => import('../pages/auth/Login'));
+const RegisterPage = lazy(() => import('../pages/auth/Register'));
+const VerifyEmailPage = lazy(() => import('../pages/auth/VerifyEmail'));
+const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPassword'));
+const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPassword'));
+
+// Payment pages
+const CheckoutPage = lazy(() => import('../pages/public/Checkout'));
+const SetupCompletePage = lazy(() => import('../pages/public/SetupComplete'));
+const PagoExitoPage = lazy(() => import('../pages/public/PagoExito'));
+const PagoCanceladoPage = lazy(() => import('../pages/public/PagoCancelado'));
+
+// App pages
+const DashboardPage = lazy(() => import('../pages/app/Dashboard'));
+const SaludPage = lazy(() => import('../pages/app/Salud'));
+const SeguridadPage = lazy(() => import('../pages/app/Seguridad'));
+const FacturacionPage = lazy(() => import('../pages/app/Facturacion'));
+const AjustesPage = lazy(() => import('../pages/app/Ajustes'));
+const SoportePage = lazy(() => import('../pages/app/Soporte'));
+
+// Admin pages
+const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboard'));
+const AdminUsersPage = lazy(() => import('../pages/admin/AdminUsers'));
+const AdminTicketsPage = lazy(() => import('../pages/admin/AdminTickets'));
 
 export const router = createBrowserRouter([
+  // Publicly accessible pages
   {
     path: ROUTES.HOME,
-    element: <Navigate to={ROUTES.LICENCIAMIENTOS} replace />,
+    element: <LandingPage />,
   },
   {
     path: ROUTES.LICENCIAMIENTOS,
     element: <LicenciamientosPage />,
   },
   {
-    path: ROUTES.LOGIN,
-    element: <LoginPage />,
+    path: ROUTES.CARACTERISTICAS,
+    element: <CaracteristicasPage />,
   },
   {
-    path: ROUTES.REGISTRO,
-    element: <RegisterPage />,
+    path: ROUTES.FAQ,
+    element: <FAQPage />,
   },
+  {
+    path: ROUTES.CONTACTO,
+    element: <ContactoPage />,
+  },
+  {
+    path: ROUTES.NOSOTROS,
+    element: <NosotrosPage />,
+  },
+  {
+    path: ROUTES.BLOG,
+    element: <BlogPage />,
+  },
+  {
+    path: ROUTES.STATUS,
+    element: <StatusPage />,
+  },
+  {
+    path: ROUTES.TERMINOS,
+    element: <TerminosPage />,
+  },
+  {
+    path: ROUTES.PRIVACIDAD,
+    element: <PrivacidadPage />,
+  },
+  {
+    path: ROUTES.COOKIES,
+    element: <CookiesPage />,
+  },
+  {
+    path: ROUTES.AVISO_LEGAL,
+    element: <AvisoLegalPage />,
+  },
+  // Confirmación de correo / 2FA: accesible sin sesión (el registro devuelve
+  // requiresVerification sin token; protegerlo aquí redirigía al usuario
+  // prematuramente a /login o /dashboard antes de completar la verificación)
   {
     path: ROUTES.CONFIRMAR_CORREO,
     element: <VerifyEmailPage />,
   },
+
+  // Auth pages (Only accessible when NOT logged in)
   {
-    path: ROUTES.PAGO_EXITO,
-    element: <PagoExitoPage />,
+    element: <PublicOnlyRoute />,
+    children: [
+      { path: ROUTES.LOGIN, element: <LoginPage /> },
+      { path: ROUTES.REGISTRO, element: <RegisterPage /> },
+      { path: ROUTES.RECUPERAR_PASSWORD, element: <ForgotPasswordPage /> },
+      { path: ROUTES.RESET_PASSWORD, element: <ResetPasswordPage /> },
+    ],
   },
-  {
-    path: ROUTES.PAGO_CANCELADO,
-    element: <PagoCanceladoPage />,
-  },
+
+  // Verification & Payments (Only accessible when logged in)
   {
     element: <ProtectedRoute />,
     children: [
-      { path: ROUTES.CHECKOUT, element: <CheckoutPage /> },
-      { path: ROUTES.CONFIGURACION_COMPLETADA, element: <SetupCompletePage /> },
+      {
+        element: <PermissionRoute anyOf={[APP_PERMISSIONS.BILLING_MANAGE]} />,
+        children: [
+          { path: ROUTES.CHECKOUT, element: <CheckoutPage /> },
+          { path: ROUTES.CONFIGURACION_COMPLETADA, element: <SetupCompletePage /> },
+          { path: ROUTES.PAGO_EXITO, element: <PagoExitoPage /> },
+          { path: ROUTES.PAGO_CANCELADO, element: <PagoCanceladoPage /> },
+        ],
+      },
+
+      // Standard App Layout
       {
         element: <AppLayout />,
         children: [
-          { path: ROUTES.DASHBOARD, element: <DashboardPage /> },
-          { path: ROUTES.SALUD, element: <SaludPage /> },
-          { path: ROUTES.SEGURIDAD, element: <SeguridadPage /> },
-          { path: ROUTES.FACTURACION, element: <FacturacionPage /> },
-          { path: ROUTES.AJUSTES, element: <AjustesPage /> },
+          {
+            element: <PermissionRoute anyOf={[APP_PERMISSIONS.PATIENT_CREATE, APP_PERMISSIONS.PATIENT_READ, APP_PERMISSIONS.ALERT_READ]} />,
+            children: [{ path: ROUTES.DASHBOARD, element: <DashboardPage /> }],
+          },
+          {
+            element: <PermissionRoute anyOf={[APP_PERMISSIONS.HEALTH_SUMMARY]} />,
+            children: [{ path: ROUTES.SALUD, element: <SaludPage /> }],
+          },
+          {
+            element: <PermissionRoute anyOf={[APP_PERMISSIONS.ACCOUNT_SESSIONS]} />,
+            children: [{ path: ROUTES.SEGURIDAD, element: <SeguridadPage /> }],
+          },
+          {
+            element: <PermissionRoute anyOf={[APP_PERMISSIONS.BILLING_MANAGE]} />,
+            children: [{ path: ROUTES.FACTURACION, element: <FacturacionPage /> }],
+          },
+          {
+            element: <PermissionRoute anyOf={[APP_PERMISSIONS.ACCOUNT_PROFILE]} />,
+            children: [
+              { path: ROUTES.AJUSTES, element: <AjustesPage /> },
+              { path: ROUTES.SOPORTE, element: <SoportePage /> },
+            ],
+          },
         ],
       },
     ],
   },
+
+  // Administrative Panel (Only accessible to administrators)
+  {
+    element: <AdminRoute />,
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { path: ROUTES.ADMIN_DASHBOARD, element: <AdminDashboardPage /> },
+          { path: ROUTES.ADMIN_USUARIOS, element: <AdminUsersPage /> },
+          { path: ROUTES.ADMIN_TICKETS, element: <AdminTicketsPage /> },
+        ],
+      },
+    ],
+  },
+
+  // 404 Route
   {
     path: '*',
-    element: (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <h1 style={{ fontSize: '4rem', fontWeight: 800, background: 'var(--gradient-cyan-blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>404</h1>
-          <p style={{ color: 'var(--color-text-muted)' }}>Página no encontrada</p>
-        </div>
-      </div>
-    ),
+    element: <NotFoundPage />,
   },
 ]);

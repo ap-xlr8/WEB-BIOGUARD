@@ -1,16 +1,18 @@
-import logoUrl from '../../assets/logo.png';
+import logoUrl from '../../assets/logo-icon.png';
 
 interface LogoProps {
   size?: number;
   showText?: boolean;
+  decorative?: boolean;
 }
 
-export function Logo({ size = 34, showText = true }: LogoProps) {
+export function Logo({ size = 34, showText = true, decorative = false }: LogoProps) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <img
         src={logoUrl}
-        alt="BioGuard"
+        alt={decorative || showText ? '' : 'BioGuard'}
+        aria-hidden={decorative || showText}
         style={{
           width: size,
           height: size,

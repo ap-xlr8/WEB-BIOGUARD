@@ -1,18 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { User, Mail, AlertTriangle, Camera, Lock } from 'lucide-react';
 import { LoadingSpinner, Button } from '../../components/ui';
 import { usuarioService, authService } from '../../services';
 import { useAuth } from '../../context';
-import { UsuarioPerfilResponse } from '../../types';
 import { ROUTES } from '../../constants';
 import styles from './Ajustes.module.css';
 
 export default function AjustesPage() {
   const { user, logout, setPhotoUrl, photoUrl } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [perfil, setPerfil] = useState<UsuarioPerfilResponse | null>(null);
+  const queryClient = useQueryClient();
   const [formNombre, setFormNombre] = useState({ nombre: '', apellidoPaterno: '', apellidoMaterno: '' });
   const [formCorreo, setFormCorreo] = useState('');
   const [showDelete, setShowDelete] = useState(false);
@@ -21,50 +20,99 @@ export default function AjustesPage() {
   const [passMsg, setPassMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const setPhotoUrlRef = useRef(setPhotoUrl);
+  setPhotoUrlRef.current = setPhotoUrl;
+
+  const perfilQuery = useQuery({
+    queryKey: ['usuario', 'perfil'],
+    queryFn: () => usuarioService.miPerfil(),
+  });
+  const perfil = perfilQuery.data ?? null;
+
   useEffect(() => {
-    usuarioService.miPerfil().then(p => {
-      setPerfil(p);
-      setFormNombre({ nombre: p.nombre, apellidoPaterno: p.apellidoPaterno, apellidoMaterno: p.apellidoMaterno || '' });
-      if (p.fotoPerfil) setPhotoUrl(p.fotoPerfil);
-    }).finally(() => setLoading(false));
-  }, []);
+    if (perfil) {
+      setFormNombre({ nombre: perfil.nombre, apellidoPaterno: perfil.apellidoPaterno, apellidoMaterno: perfil.apellidoMaterno || '' });
+      if (perfil.fotoPerfil) setPhotoUrlRef.current(perfil.fotoPerfil);
+    }
+  }, [perfil]);
 
-  const handleSavePerfil = async () => {
+  const savePerfilMutation = useMutation({
+    mutationFn: () => usuarioService.editarPerfil(formNombre),
+    onSuccess: () => {
+      setMsg('Perfil actualizado correctamente');
+      queryClient.invalidateQueries({ queryKey: ['usuario', 'perfil'] });
+    },
+    onError: (err) => setMsg(err?.message || 'Error al guardar'),
+  });
+
+  const cambiarCorreoMutation = useMutation({
+    mutationFn: () => usuarioService.cambiarCorreo({ nuevoCorreo: formCorreo }),
+    onSuccess: () => {
+      setMsg('Correo actualizado correctamente');
+      setFormCorreo('');
+    },
+    onError: (err) => setMsg(err?.message || 'Error al cambiar correo'),
+  });
+
+  const cambiarPassMutation = useMutation({
+    mutationFn: () => authService.cambiarPassword({ passwordActual: passForm.actual, nuevaPassword: passForm.nueva }),
+    onSuccess: () => {
+      setPassMsg('Contraseña actualizada');
+      setPassForm({ actual: '', nueva: '' });
+    },
+    onError: (err) => setPassMsg(err?.message || 'Error'),
+  });
+
+  const subirFotoMutation = useMutation({
+    mutationFn: (vars: { base64: string; dataUrl: string }) => usuarioService.subirFoto(vars.base64),
+    onSuccess: (_d, vars) => {
+      setPhotoUrl(vars.dataUrl);
+      setMsg('Foto actualizada');
+    },
+    onError: (err) => setMsg(err?.message || 'Error al subir foto'),
+  });
+
+  const eliminarCuentaMutation = useMutation({
+    mutationFn: () => usuarioService.eliminarCuenta(),
+    onSuccess: () => {
+      logout();
+      navigate(ROUTES.LOGIN);
+    },
+    onError: (err) => setMsg(err?.message || 'Error al eliminar cuenta'),
+  });
+
+  const handleSavePerfil = () => {
     if (!formNombre.nombre || !formNombre.apellidoPaterno) { setMsg('Nombre y apellido paterno son obligatorios'); return; }
-    try { await usuarioService.editarPerfil(formNombre); setMsg('Perfil actualizado correctamente'); setPerfil(p => p ? { ...p, ...formNombre } : p); }
-    catch (err: any) { setMsg(err?.message || 'Error al guardar'); }
+    savePerfilMutation.mutate();
   };
 
-  const handleSaveCorreo = async () => {
+  const handleSaveCorreo = () => {
     if (!formCorreo || !/\S+@\S+\.\S+/.test(formCorreo)) { setMsg('Correo electrónico inválido'); return; }
-    try { await usuarioService.cambiarCorreo({ nuevoCorreo: formCorreo }); setMsg('Correo actualizado correctamente'); setFormCorreo(''); }
-    catch (err: any) { setMsg(err?.message || 'Error al cambiar correo'); }
+    cambiarCorreoMutation.mutate();
   };
 
-  const handleChangePass = async () => {
+  const handleChangePass = () => {
     if (!passForm.actual || !passForm.nueva || passForm.nueva.length < 8) { setPassMsg('Ambos campos obligatorios. Mínimo 8 caracteres.'); return; }
-    try { await authService.cambiarPassword({ passwordActual: passForm.actual, nuevaPassword: passForm.nueva }); setPassMsg('Contraseña actualizada'); setPassForm({ actual: '', nueva: '' }); }
-    catch (err: any) { setPassMsg(err?.message || 'Error'); }
+    cambiarPassMutation.mutate();
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowedTypes.has(file.type)) { setMsg('Formato de imagen no permitido'); e.target.value = ''; return; }
     if (file.size > 2 * 1024 * 1024) { setMsg('La imagen no debe superar 2MB'); return; }
     const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = (reader.result as string).split(',')[1];
-      try { await usuarioService.subirFoto(base64); setPhotoUrl(reader.result as string); setMsg('Foto actualizada'); }
-      catch (err: any) { setMsg(err?.message || 'Error al subir foto'); }
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      subirFotoMutation.mutate({ base64, dataUrl });
     };
     reader.readAsDataURL(file);
   };
 
-  const handleDelete = async () => {
-    try { await usuarioService.eliminarCuenta(); logout(); navigate(ROUTES.LOGIN); }
-    catch (err: any) { setMsg(err?.message || 'Error al eliminar cuenta'); }
-  };
+  const handleDelete = () => eliminarCuentaMutation.mutate();
 
-  if (loading) return <LoadingSpinner />;
+  if (perfilQuery.isPending) return <LoadingSpinner />;
 
   return (
     <div className={styles.page}>
@@ -78,7 +126,7 @@ export default function AjustesPage() {
             <div style={{ width: 96, height: 96, borderRadius: '50%', background: photoUrl ? 'transparent' : 'rgba(45,156,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: '2px solid rgba(45,156,255,0.2)' }}>
               {photoUrl ? <img src={photoUrl} alt="Foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <User size={36} style={{ color: '#2D9CFF', opacity: 0.5 }} />}
             </div>
-            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} style={{ display: 'none' }} />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} style={{ display: 'none' }} />
             <Button size="sm" onClick={() => fileRef.current?.click()}>{photoUrl ? 'Cambiar foto' : 'Subir foto'}</Button>
             {msg && msg.includes('Foto') && <span className={msg.includes('Error') ? styles.error : styles.success}>{msg}</span>}
           </div>
@@ -87,9 +135,9 @@ export default function AjustesPage() {
         <div className={styles.card}>
           <div className={styles.cardTitle}><User size={18} style={{ color: '#2D9CFF' }} /> Editar Perfil</div>
           <div className={styles.formGroup}>
-            <div className={styles.field}><div className={styles.label}>Nombre</div><input className={styles.input} value={formNombre.nombre} onChange={e => setFormNombre({ ...formNombre, nombre: e.target.value })} placeholder="Tu nombre" /></div>
-            <div className={styles.field}><div className={styles.label}>Apellido Paterno</div><input className={styles.input} value={formNombre.apellidoPaterno} onChange={e => setFormNombre({ ...formNombre, apellidoPaterno: e.target.value })} placeholder="Apellido paterno" /></div>
-            <div className={styles.field}><div className={styles.label}>Apellido Materno</div><input className={styles.input} value={formNombre.apellidoMaterno} onChange={e => setFormNombre({ ...formNombre, apellidoMaterno: e.target.value })} placeholder="Opcional" /></div>
+            <div className={styles.field}><div className={styles.label}>Nombre</div><input className={styles.input} value={formNombre.nombre} onChange={e => setFormNombre({ ...formNombre, nombre: e.target.value })} placeholder="Tu nombre" maxLength={100} autoComplete="given-name" /></div>
+            <div className={styles.field}><div className={styles.label}>Apellido Paterno</div><input className={styles.input} value={formNombre.apellidoPaterno} onChange={e => setFormNombre({ ...formNombre, apellidoPaterno: e.target.value })} placeholder="Apellido paterno" maxLength={100} autoComplete="family-name" /></div>
+            <div className={styles.field}><div className={styles.label}>Apellido Materno</div><input className={styles.input} value={formNombre.apellidoMaterno} onChange={e => setFormNombre({ ...formNombre, apellidoMaterno: e.target.value })} placeholder="Opcional" maxLength={100} autoComplete="additional-name" /></div>
             {msg && !msg.includes('Foto') && !msg.includes('correo') && !msg.includes('Contra') && <span className={msg.includes('Error') || msg.includes('obligatorios') ? styles.error : styles.success}>{msg}</span>}
             <Button size="sm" onClick={handleSavePerfil}>Guardar cambios</Button>
           </div>
@@ -99,7 +147,7 @@ export default function AjustesPage() {
           <div className={styles.cardTitle}><Mail size={18} style={{ color: '#2D9CFF' }} /> Cambiar Correo</div>
           <div className={styles.formGroup}>
             <div className={styles.field}><div className={styles.label}>Correo actual</div><input className={styles.input} value={perfil?.correo || ''} disabled /></div>
-            <div className={styles.field}><div className={styles.label}>Nuevo correo</div><input className={styles.input} value={formCorreo} onChange={e => { setFormCorreo(e.target.value); setMsg(''); }} placeholder="nuevo@correo.com" type="email" /></div>
+            <div className={styles.field}><div className={styles.label}>Nuevo correo</div><input className={styles.input} value={formCorreo} onChange={e => { setFormCorreo(e.target.value); setMsg(''); }} placeholder="nuevo@correo.com" type="email" maxLength={254} autoComplete="email" /></div>
             {msg && msg.includes('correo') && <span className={msg.includes('Error') || msg.includes('invalido') ? styles.error : styles.success}>{msg}</span>}
             <Button size="sm" onClick={handleSaveCorreo}>Cambiar correo</Button>
           </div>
@@ -108,8 +156,8 @@ export default function AjustesPage() {
         <div className={styles.card}>
           <div className={styles.cardTitle}><Lock size={18} style={{ color: '#2D9CFF' }} /> Cambiar Contraseña</div>
           <div className={styles.formGroup}>
-            <div className={styles.field}><div className={styles.label}>Contraseña actual</div><input className={styles.input} type="password" value={passForm.actual} onChange={e => { setPassForm({ ...passForm, actual: e.target.value }); setPassMsg(''); }} placeholder="........" /></div>
-            <div className={styles.field}><div className={styles.label}>Nueva contraseña</div><input className={styles.input} type="password" value={passForm.nueva} onChange={e => { setPassForm({ ...passForm, nueva: e.target.value }); setPassMsg(''); }} placeholder="Minimo 8 caracteres" /></div>
+            <div className={styles.field}><div className={styles.label}>Contraseña actual</div><input className={styles.input} type="password" value={passForm.actual} onChange={e => { setPassForm({ ...passForm, actual: e.target.value }); setPassMsg(''); }} placeholder="........" maxLength={128} autoComplete="current-password" /></div>
+            <div className={styles.field}><div className={styles.label}>Nueva contraseña</div><input className={styles.input} type="password" value={passForm.nueva} onChange={e => { setPassForm({ ...passForm, nueva: e.target.value }); setPassMsg(''); }} placeholder="Minimo 8 caracteres" maxLength={128} autoComplete="new-password" /></div>
             {passMsg && <span className={passMsg.includes('Error') || passMsg.includes('obligatorios') ? styles.error : styles.success}>{passMsg}</span>}
             <Button size="sm" onClick={handleChangePass}>Actualizar contraseña</Button>
           </div>

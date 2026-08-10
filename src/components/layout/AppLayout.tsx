@@ -4,6 +4,8 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAuth } from '../../context';
 import styles from './AppLayout.module.css';
+import { RouteMetadata } from '../RouteMetadata';
+import { ConnectionBanner } from '../ConnectionBanner';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Panel Principal',
@@ -25,21 +27,25 @@ export function AppLayout() {
     refreshPlan();
     const interval = setInterval(refreshPlan, PLAN_REFRESH_MS);
     const onFocus = () => refreshPlan();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', () => {
+    const onVisibilityChange = () => {
       if (!document.hidden) refreshPlan();
-    });
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [refreshPlan]);
 
   return (
     <div className={styles.appLayout}>
+      <RouteMetadata />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className={styles.main}>
         <Header title={title} onMenuToggle={() => setSidebarOpen(true)} />
+        <ConnectionBanner />
         <main className={styles.content}>
           <Outlet />
         </main>

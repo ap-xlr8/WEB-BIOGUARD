@@ -1,8 +1,9 @@
 import httpClient from '../utils/httpClient';
+import type { AxiosRequestConfig } from 'axios';
 import { PacienteResponse, CrearPacienteRequest, UpdateBiometriaRequest, UpdateNombreRequest, MessageResponse, DispositivoResponse } from '../types';
 
 export const pacienteService = {
-  miPaciente: async (config?: any): Promise<PacienteResponse> => {
+  miPaciente: async (config?: AxiosRequestConfig): Promise<PacienteResponse> => {
     const { data } = await httpClient.get<PacienteResponse>('/api/Pacientes/mi-paciente', config);
     return data;
   },

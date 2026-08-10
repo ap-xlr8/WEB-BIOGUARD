@@ -70,18 +70,20 @@
   color: var(--color-cyan);
 }
 
-.main {
-  position: relative;
-  z-index: 10;
-  padding: 0 var(--spacing-lg);
+.licenciamientosContainer {
   max-width: 1200px;
   margin: 0 auto;
+  padding: 64px 24px 80px;
+  position: relative;
+  z-index: 10;
 }
 
 .hero {
   text-align: center;
   padding: 0;
+  margin-bottom: 40px;
 }
+
 
 .heroTitle {
   font-size: 1.9rem;
@@ -161,7 +163,9 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-lg);
+  margin-top: 32px;
   margin-bottom: var(--spacing-xl);
+  padding-top: 8px;
 }
 
 .planCard {
@@ -172,6 +176,9 @@
   transition: all var(--transition-base);
   position: relative;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
 }
 
 .planCard:hover {
@@ -187,11 +194,12 @@
 
 .planCardRecommended {
   border-color: var(--color-blue);
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.12);
 }
 
 .recommendedBadge {
   position: absolute;
-  top: -12px;
+  top: -14px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--gradient-cyan-blue);
@@ -199,9 +207,12 @@
   padding: 4px 16px;
   border-radius: var(--radius-full);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 229, 255, 0.3);
+  z-index: 5;
 }
+
 
 .planCategory {
   font-size: 0.75rem;

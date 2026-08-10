@@ -1,15 +1,17 @@
 import httpClient from '../utils/httpClient';
+import type { AxiosRequestConfig } from 'axios';
 import {
   UsuarioPerfilResponse,
   UpdatePerfilRequest,
   CambiarCorreoRequest,
   CambiarPlanRequest,
   PlanResponse,
+  EffectiveAccessResponse,
   MessageResponse,
 } from '../types';
 
 export const usuarioService = {
-  miPerfil: async (config?: any): Promise<UsuarioPerfilResponse> => {
+  miPerfil: async (config?: AxiosRequestConfig): Promise<UsuarioPerfilResponse> => {
     const { data } = await httpClient.get<UsuarioPerfilResponse>('/api/UsuariosWeb/mi-perfil', config);
     return data;
   },
@@ -26,6 +28,11 @@ export const usuarioService = {
 
   miPlan: async (): Promise<PlanResponse> => {
     const { data } = await httpClient.get<PlanResponse>('/api/UsuariosWeb/mi-plan');
+    return data;
+  },
+
+  miAcceso: async (): Promise<EffectiveAccessResponse> => {
+    const { data } = await httpClient.get<EffectiveAccessResponse>('/api/UsuariosWeb/mi-acceso');
     return data;
   },
 

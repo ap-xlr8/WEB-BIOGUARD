@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Menu, Bell } from 'lucide-react';
 import { useAuth } from '../../context';
 import httpClient from '../../utils/httpClient';
+import { ROUTES } from '../../constants';
 import styles from './Header.module.css';
 
 interface HeaderProps {
@@ -33,12 +35,25 @@ export function Header({ title, onMenuToggle }: HeaderProps) {
         const data = (res.data || []) as NotifItem[];
         setNotifs(data.slice(0, 10));
         setUnread(data.filter((n: NotifItem) => !n.leida).length);
-      } catch {}
+      } catch {
+        return;
+      }
     };
     load();
     const interval = setInterval(load, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const markAsRead = async (notification: NotifItem) => {
+    if (notification.leida) return;
+    try {
+      await httpClient.put(`/api/Notificaciones/${notification.id}/leer`);
+      setNotifs((items) => items.map((item) => item.id === notification.id ? { ...item, leida: true } : item));
+      setUnread((value) => Math.max(0, value - 1));
+    } catch {
+      return;
+    }
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setNotifOpen(false); };
@@ -57,7 +72,7 @@ export function Header({ title, onMenuToggle }: HeaderProps) {
 
       <div className={styles.right}>
         <div ref={ref} style={{ position: 'relative' }}>
-          <button className={styles.iconBtn} aria-label="Notificaciones" onClick={() => setNotifOpen(!notifOpen)}>
+          <button className={styles.iconBtn} aria-label="Notificaciones" aria-expanded={notifOpen} onClick={() => setNotifOpen(!notifOpen)}>
             <Bell size={20} />
             {unread > 0 && <span className={styles.notifDot} />}
           </button>
@@ -77,7 +92,8 @@ export function Header({ title, onMenuToggle }: HeaderProps) {
                 </div>
               ) : (
                 notifs.map(n => (
-                  <div key={n.id} style={{
+                  <button type="button" key={n.id} onClick={() => void markAsRead(n)} style={{
+                    width: '100%', border: 0, textAlign: 'left', color: 'inherit',
                     padding: '10px 14px', borderRadius: 8, marginBottom: 2,
                     background: n.leida ? 'transparent' : 'rgba(45,156,255,0.04)',
                     cursor: 'pointer', transition: 'background 0.15s',
@@ -90,13 +106,13 @@ export function Header({ title, onMenuToggle }: HeaderProps) {
                     <div style={{ fontSize: '0.7rem', color: '#5a6d8a', marginTop: 4 }}>
                       {new Date(n.fechaEnvio).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </div>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
           )}
         </div>
-        <button className={styles.userBtn}>
+        <Link className={styles.userBtn} to={ROUTES.AJUSTES} aria-label="Abrir ajustes de la cuenta">
           <div className={styles.avatar}>
             {photoUrl ? (
               <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
@@ -105,7 +121,7 @@ export function Header({ title, onMenuToggle }: HeaderProps) {
             )}
           </div>
           <span>{user?.nombre || 'Usuario'}</span>
-        </button>
+        </Link>
       </div>
     </header>
   );

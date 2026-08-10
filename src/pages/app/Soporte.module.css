@@ -1,0 +1,359 @@
+.container {
+  padding: 24px;
+  color: #F5F7FA;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: #8E9CB8;
+}
+
+.mainLayout {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 24px;
+}
+
+/* List section */
+.listSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ticketGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ticketCard {
+  background: #111C2E;
+  border: 1px solid rgba(45, 156, 255, 0.08);
+  border-radius: 14px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ticketCard:hover {
+  border-color: rgba(45, 156, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.ticketCardActive {
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(45, 156, 255, 0.04);
+}
+
+.ticketCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ticketCategory {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #8E9CB8;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.priorityBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: capitalize;
+}
+
+.ticketAsunto {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #F5F7FA;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ticketDesc {
+  font-size: 0.82rem;
+  color: #8E9CB8;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ticketCardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #8E9CB8;
+  border-top: 1px solid rgba(255,255,255,0.03);
+  padding-top: 8px;
+}
+
+.ticketStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.ticketDate {
+  color: #5a6d8a;
+}
+
+/* Detail section */
+.detailSection {
+  min-height: 500px;
+}
+
+.detailPlaceholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 28, 46, 0.5);
+  border: 1px dashed rgba(45, 156, 255, 0.15);
+  border-radius: 20px;
+  color: #8E9CB8;
+  padding: 40px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.detailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.detailHeader h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.detailStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: rgba(45,156,255,0.08);
+}
+
+.detailDesc {
+  font-size: 0.9rem;
+  color: #8E9CB8;
+  line-height: 1.5;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.messageThread {
+  flex-grow: 1;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+  max-height: 320px;
+}
+
+.threadTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #5a6d8a;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  text-align: left;
+}
+
+.message {
+  padding: 14px;
+  border-radius: 12px;
+  max-width: 85%;
+  text-align: left;
+}
+
+.messageUser {
+  background: #19273C;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+
+.messageAdmin {
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+}
+
+.messageMeta {
+  font-size: 0.72rem;
+  color: #8E9CB8;
+  margin-bottom: 4px;
+}
+
+.messageContent {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 0;
+  color: #F5F7FA;
+}
+
+.replyBox {
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 16px;
+}
+
+.replyArea {
+  width: 100%;
+  background: #07111D;
+  border: 1px solid rgba(45, 156, 255, 0.15);
+  border-radius: 10px;
+  padding: 12px;
+  color: #F5F7FA;
+  font-family: inherit;
+  font-size: 0.85rem;
+  min-height: 70px;
+  resize: none;
+  outline: none;
+}
+
+/* Modals */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modalContent {
+  background: #111C2E;
+  border: 1px solid rgba(45, 156, 255, 0.15);
+  border-radius: 16px;
+  max-width: 520px;
+  width: calc(100% - 32px);
+  padding: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modalHeader h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.closeModalBtn {
+  background: none;
+  border: none;
+  color: #8E9CB8;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.formGroup label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #8E9CB8;
+  text-transform: uppercase;
+}
+
+.formRow {
+  display: flex;
+  gap: 16px;
+}
+
+.select {
+  background: #07111D;
+  border: 1px solid rgba(45, 156, 255, 0.15);
+  color: #F5F7FA;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.textarea {
+  background: #07111D;
+  border: 1px solid rgba(45, 156, 255, 0.15);
+  color: #F5F7FA;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  min-height: 100px;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 16px;
+  margin-top: 24px;
+}
+
+@media (max-width: 900px) {
+  .mainLayout { grid-template-columns: 1fr; }
+  .detailSection { min-height: auto; }
+}

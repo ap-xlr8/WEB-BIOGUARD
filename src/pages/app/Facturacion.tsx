@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, Crown, AlertTriangle, Shield, Receipt, Calendar } from 'lucide-react';
 import { LoadingSpinner, Button } from '../../components/ui';
 import { pagoService, usuarioService } from '../../services';
@@ -9,57 +10,63 @@ import styles from './Facturacion.module.css';
 
 export default function FacturacionPage() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<PlanResponse | null>(null);
-  const [historial, setHistorial] = useState<PagoResponse[]>([]);
+  const queryClient = useQueryClient();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelMsg, setCancelMsg] = useState('');
   const [reciboId, setReciboId] = useState('');
   const [reciboData, setReciboData] = useState<ReciboResponse | null>(null);
 
-  const load = async () => {
-    try {
-      const [p, h] = await Promise.all([
-        usuarioService.miPlan(),
-        pagoService.historial(),
-      ]);
-      setPlan(p);
-      setHistorial(Array.isArray(h) ? h : []);
-    } catch {
-      setPlan(null);
-      setHistorial([]);
-    } finally { setLoading(false); }
-  };
+  const planQuery = useQuery({
+    queryKey: ['usuario', 'plan'],
+    queryFn: () => usuarioService.miPlan(),
+  });
+  const historialQuery = useQuery({
+    queryKey: ['pagos', 'historial'],
+    queryFn: () => pagoService.historial(),
+  });
 
-  useEffect(() => { load(); }, []);
+  const plan: PlanResponse | null = planQuery.data ?? null;
+  const historial: PagoResponse[] = Array.isArray(historialQuery.data) ? historialQuery.data : [];
 
-  const handleCancel = async () => {
-    try {
-      await pagoService.cancelar();
+  const cancelMutation = useMutation({
+    mutationFn: () => pagoService.cancelar(),
+    onSuccess: () => {
       setCancelMsg('Suscripcion cancelada correctamente');
-      setTimeout(() => { setShowCancel(false); load(); }, 1500);
-    } catch (err: any) {
+      setTimeout(() => {
+        setShowCancel(false);
+        queryClient.invalidateQueries({ queryKey: ['usuario', 'plan'] });
+        queryClient.invalidateQueries({ queryKey: ['pagos', 'historial'] });
+      }, 1500);
+    },
+    onError: (err) => {
       setCancelMsg(err?.message || 'Error al cancelar');
-    }
-  };
+    },
+  });
 
-  const handleRecibo = async (id: string) => {
-    if (reciboId === id) { setReciboId(''); setReciboData(null); return; }
-    try {
-      const r = await pagoService.recibo(id);
+  const reciboMutation = useMutation({
+    mutationFn: (id: string) => pagoService.recibo(id),
+    onSuccess: (r, id) => {
       setReciboData(r);
       setReciboId(id);
-    } catch {
+    },
+    onError: () => {
       setReciboData(null);
-    }
+    },
+  });
+
+  const handleCancel = () => cancelMutation.mutate();
+
+  const handleRecibo = (id: string) => {
+    if (reciboId === id) { setReciboId(''); setReciboData(null); return; }
+    reciboMutation.mutate(id);
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (planQuery.isPending || historialQuery.isPending) return <LoadingSpinner />;
 
   const planName = plan?.nombre || 'Gratis';
   const planPrice = plan?.precio ?? 0;
   const planMoneda = plan?.precioMoneda || 'MXN';
-  const proximoPago = historial.length > 0 && historial[0].estado === 'completado'
+  const ultimoPago = historial.length > 0 && historial[0].estado === 'completado'
     ? new Date(historial[0].fechaPago).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' })
     : null;
 
@@ -89,10 +96,10 @@ export default function FacturacionPage() {
             {planPrice === 0 ? 'Acceso gratuito ilimitado' : 'Facturacion mensual'}
           </div>
 
-          {proximoPago && (
+          {ultimoPago && (
             <div style={{ display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'var(--color-bg-tertiary)',borderRadius:8,marginBottom:12 }}>
               <Calendar size={16} style={{ color:'var(--color-text-muted)' }}/>
-              <span style={{ fontSize:'0.84rem',color:'var(--color-text-secondary)' }}>Proximo pago: <strong style={{ color:'var(--color-text-primary)' }}>{proximoPago}</strong></span>
+              <span style={{ fontSize:'0.84rem',color:'var(--color-text-secondary)' }}>Último pago registrado: <strong style={{ color:'var(--color-text-primary)' }}>{ultimoPago}</strong></span>
             </div>
           )}
 
@@ -143,7 +150,7 @@ export default function FacturacionPage() {
               Metodos de Pago
             </div>
             <span style={{ fontSize:'0.7rem',display:'flex',alignItems:'center',gap:4,color:'var(--color-text-muted)' }}>
-              <Shield size={12}/> Cifrado SSL
+              <Shield size={12}/> Conexión TLS
             </span>
           </div>
 
@@ -160,7 +167,7 @@ export default function FacturacionPage() {
                       <div style={{ fontSize:'0.75rem',color:'var(--color-text-muted)' }}>Ultimo pago: {new Date(p.fechaPago).toLocaleDateString('es-MX')}</div>
                     </div>
                   </div>
-                  <span style={{ fontSize:'0.72rem',color:'var(--color-success)',fontWeight:500 }}>Predeterminado</span>
+                  <span style={{ fontSize:'0.72rem',color:'var(--color-success)',fontWeight:500 }}>Registrado</span>
                 </div>
               ))}
             </div>
@@ -270,7 +277,9 @@ export default function FacturacionPage() {
               <Button variant="secondary" size="sm" onClick={() => setShowCancel(false)}
                 disabled={cancelMsg.includes('correctamente')}>Volver</Button>
               <Button variant="danger" size="sm" onClick={handleCancel}
-                disabled={cancelMsg.includes('correctamente')}>Confirmar cancelacion</Button>
+                disabled={cancelMsg.includes('correctamente') || cancelMutation.isPending}>
+                {cancelMutation.isPending ? 'Cancelando...' : 'Confirmar cancelacion'}
+              </Button>
             </div>
           </div>
         </div>

@@ -7,6 +7,7 @@ import { useAuth } from '../../context';
 import { ROUTES } from '../../constants';
 import { RegisterWebRequest } from '../../types';
 import styles from './Auth.module.css';
+import { getErrorMessage, getErrorStatus } from '../../utils/errors';
 
 export default function RegisterPage() {
   const { register, isAuthenticated, isLoading } = useAuth();
@@ -89,16 +90,16 @@ export default function RegisterPage() {
         apellidoPaterno: form.apellidoPaterno.trim(),
         apellidoMaterno: form.apellidoMaterno ? form.apellidoMaterno.trim() : '',
       };
-      const res: any = await register(data);
+      const res = await register(data);
       if (res?.requiresVerification || res?.token === 'pending_verification') {
         window.location.replace(`${ROUTES.CONFIRMAR_CORREO}?correo=${encodeURIComponent(data.correo)}`);
       } else {
         window.location.replace(ROUTES.DASHBOARD);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
-      const status = err?.status || err?.response?.status;
-      const rawMsg = err?.message || err?.response?.data?.message || '';
+      const status = getErrorStatus(err);
+      const rawMsg = getErrorMessage(err, '');
       
       if (status === 409 || rawMsg.toLowerCase().includes('registrado') || rawMsg.toLowerCase().includes('duplicado') || rawMsg.toLowerCase().includes('already exists')) {
         setErrors({ correo: 'Este correo ya está registrado. ¿Ya tienes cuenta?' });

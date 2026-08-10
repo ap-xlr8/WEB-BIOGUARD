@@ -1,105 +1,129 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { User, UserPlus, QrCode, Copy, Activity, Key, Check, X, Lock } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { LoadingSpinner } from '../../components/ui';
 import { usuarioService, pacienteService, cuidadorService } from '../../services';
-import { UsuarioPerfilResponse, PacienteResponse, CuidadorResponse, AuditoriaResponse } from '../../types';
+import { PacienteResponse, CuidadorResponse, AuditoriaResponse } from '../../types';
 import httpClient from '../../utils/httpClient';
 import styles from './Seguridad.module.css';
+import { useAuth } from '../../context';
+import { APP_PERMISSIONS, hasPermission } from '../../auth/authorization';
 
 const QR_LOGIN_URL = (import.meta.env.VITE_APP_URL || window.location.origin) + '/login?code=';
 
 export default function SeguridadPage() {
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const [perfil, setPerfil] = useState<UsuarioPerfilResponse | null>(null);
-  const [paciente, setPaciente] = useState<PacienteResponse | null>(null);
-  const [cuidadores, setCuidadores] = useState<CuidadorResponse[]>([]);
-  const [auditoria, setAuditoria] = useState<AuditoriaResponse[]>([]);
+  const queryClient = useQueryClient();
+  const { access } = useAuth();
+  const canReadPatient = hasPermission(access, APP_PERMISSIONS.PATIENT_READ);
+  const canManageCaregivers = hasPermission(access, APP_PERMISSIONS.CAREGIVER_MANAGE);
+
   const [copied, setCopied] = useState(false);
   const [patCopied, setPatCopied] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [cuidForm, setCuidForm] = useState({ nombre: '', parentesco: '', telefono: '', correo: '' });
   const [cuidError, setCuidError] = useState('');
-  const [cuidLoading, setCuidLoading] = useState(false);
   const [showCredenciales, setShowCredenciales] = useState<CuidadorResponse | null>(null);
-  const [qrCode, setQrCode] = useState('');
-  const [pacienteQR, setPacienteQR] = useState('');
+  const [showPatientQR, setShowPatientQR] = useState(false);
   const [editCuidador, setEditCuidador] = useState<CuidadorResponse | null>(null);
   const [editForm, setEditForm] = useState({ nombre: '', parentesco: '' });
   const [cuidCopied, setCuidCopied] = useState(false);
-  const [showPatientQR, setShowPatientQR] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const load = async () => {
-      setLoadError('');
-      let errorsList: string[] = [];
+  const perfilQuery = useQuery({
+    queryKey: ['usuario', 'perfil'],
+    queryFn: () => usuarioService.miPerfil(),
+  });
 
-      try {
-        const p = await usuarioService.miPerfil({ signal: controller.signal });
-        setPerfil(p);
-      } catch (err: any) {
-        if (err?.name !== 'CanceledError' && err?.message !== 'canceled') {
-          console.error('Error al cargar perfil:', err);
-          errorsList.push('Perfil de usuario');
-        }
-      }
+  const pacienteQuery = useQuery({
+    queryKey: ['paciente'],
+    queryFn: () => access?.pacienteId
+      ? pacienteService.getById(access.pacienteId)
+      : pacienteService.miPaciente(),
+    enabled: canReadPatient || canManageCaregivers,
+  });
+  const paciente: PacienteResponse | null = pacienteQuery.data ?? null;
+  const pacienteId = paciente?.id;
 
-      try {
-        const aud = await httpClient.get('/api/Auditoria?pagina=1&porPagina=20', { signal: controller.signal })
-          .then(r => r.data as AuditoriaResponse[]);
-        setAuditoria(aud);
-      } catch (err: any) {
-        if (err?.name !== 'CanceledError' && err?.message !== 'canceled') {
-          console.error('Error al cargar logs de auditoría:', err);
-          errorsList.push('Registros de auditoría');
-        }
-      }
+  const cuidadoresQuery = useQuery({
+    queryKey: ['cuidadores', pacienteId],
+    queryFn: () => cuidadorService.getByPaciente(pacienteId!),
+    enabled: !!pacienteId && canManageCaregivers,
+  });
 
-      try {
-        const pac = await pacienteService.miPaciente({ signal: controller.signal });
-        setPaciente(pac);
-        if (pac) {
-          try {
-            const cuid = await cuidadorService.getByPaciente(pac.id, { signal: controller.signal });
-            setCuidadores(cuid || []);
-          } catch (err: any) {
-            if (err?.name !== 'CanceledError' && err?.message !== 'canceled') {
-              console.error('Error al cargar cuidadores:', err);
-              errorsList.push('Cuidadores');
-            }
-          }
-          try {
-            const qrRes = await httpClient.get(`/api/Pacientes/${pac.id}/qr`, { signal: controller.signal });
-            setPacienteQR(qrRes.data?.codigoAccesoQr || '');
-          } catch (err: any) {
-            if (err?.name !== 'CanceledError' && err?.message !== 'canceled') {
-              console.error('Error al cargar QR del paciente:', err);
-              errorsList.push('Código de acceso QR');
-            }
-          }
-        }
-      } catch (err: any) {
-        if (err?.name !== 'CanceledError' && err?.message !== 'canceled') {
-          console.error('Error al cargar datos del paciente:', err);
-          errorsList.push('Datos del paciente');
-        }
-      }
+  const pacienteQRQuery = useQuery({
+    queryKey: ['paciente-qr', pacienteId],
+    queryFn: () => httpClient.get(`/api/Pacientes/${pacienteId}/qr`).then(r => r.data?.codigoAccesoQr || ''),
+    enabled: !!pacienteId && canManageCaregivers,
+  });
 
-      if (errorsList.length > 0) {
-        setLoadError(`No se pudieron cargar algunas secciones: ${errorsList.join(', ')}. Verifica tu conexión.`);
-      }
-      setLoading(false);
-    };
-    setLoading(true);
-    load();
-    return () => { controller.abort(); };
-  }, []);
+  const auditoriaQuery = useQuery({
+    queryKey: ['auditoria'],
+    queryFn: () => httpClient.get('/api/Auditoria?pagina=1&porPagina=20').then(r => r.data as AuditoriaResponse[]),
+  });
 
-  const getPacienteQR = () => pacienteQR;
+  const cuidadorQrQuery = useQuery({
+    queryKey: ['cuidador-qr', showCredenciales?.id],
+    queryFn: () => httpClient.get(`/api/Cuidadores/${showCredenciales!.id}/qr`).then(r => r.data?.codigoAccesoQr || ''),
+    enabled: !!showCredenciales && canManageCaregivers,
+  });
+
+  const cuidadores = cuidadoresQuery.data ?? [];
+  const auditoria = auditoriaQuery.data ?? [];
+  const pacienteQR = pacienteQRQuery.data ?? '';
+  const qrCode = cuidadorQrQuery.data || showCredenciales?.codigoAccesoQr || '';
+
+  const failed: string[] = [];
+  if (perfilQuery.isError) failed.push('Perfil de usuario');
+  if (auditoriaQuery.isError) failed.push('Registros de auditoría');
+  if (pacienteQuery.isError) failed.push('Datos del paciente');
+  if (cuidadoresQuery.isError) failed.push('Cuidadores');
+  if (pacienteQRQuery.isError) failed.push('Código de acceso QR');
+  const loadError = failed.length > 0
+    ? `No se pudieron cargar algunas secciones: ${failed.join(', ')}. Verifica tu conexión.`
+    : '';
+
+  const crearCuidadorMutation = useMutation({
+    mutationFn: () => cuidadorService.crear({
+      pacienteId: pacienteId!,
+      nombre: cuidForm.nombre,
+      parentesco: cuidForm.parentesco,
+      telefono: cuidForm.telefono,
+      correo: cuidForm.correo,
+    }),
+    onMutate: () => setCuidError(''),
+    onSuccess: () => {
+      setShowModal(false);
+      setCuidForm({ nombre: '', parentesco: '', telefono: '', correo: '' });
+      queryClient.invalidateQueries({ queryKey: ['cuidadores', pacienteId] });
+    },
+    onError: (err) => {
+      setCuidError(err.message || 'Error al crear cuidador');
+    },
+  });
+
+  const editarCuidadorMutation = useMutation({
+    mutationFn: () => cuidadorService.editar(editCuidador!.id, editForm),
+    onSuccess: () => {
+      setEditCuidador(null);
+      queryClient.invalidateQueries({ queryKey: ['cuidadores', pacienteId] });
+    },
+    onError: (err) => {
+      console.error('Error al editar cuidador:', err);
+    },
+  });
+
+  const regenerarQrMutation = useMutation({
+    mutationFn: () => httpClient.post(`/api/Cuidadores/${showCredenciales!.id}/regenerar-qr`).then(r => r.data?.codigoAccesoQr || ''),
+    onSuccess: (newCode) => {
+      if (showCredenciales) queryClient.setQueryData(['cuidador-qr', showCredenciales.id], newCode);
+    },
+    onError: (err) => {
+      console.error('Error al regenerar QR:', err);
+    },
+  });
 
   const handleCopyKey = async () => {
-    const text = getPacienteQR();
+    const text = pacienteQR;
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
@@ -117,17 +141,7 @@ export default function SeguridadPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const reloadCuidadores = async () => {
-    if (!paciente) return;
-    try {
-      const cuid = await cuidadorService.getByPaciente(paciente.id);
-      setCuidadores(cuid || []);
-    } catch (err) {
-      console.error('Error al recargar cuidadores:', err);
-    }
-  };
-
-  const handleAddCaregiver = async () => {
+  const handleAddCaregiver = () => {
     if (!paciente) return;
     if (!cuidForm.nombre || !cuidForm.parentesco || !cuidForm.telefono || !cuidForm.correo) {
       setCuidError('Todos los campos son obligatorios');
@@ -137,44 +151,12 @@ export default function SeguridadPage() {
       setCuidError('Correo inválido');
       return;
     }
-    setCuidLoading(true);
-    setCuidError('');
-    try {
-      await cuidadorService.crear({
-        pacienteId: paciente.id,
-        nombre: cuidForm.nombre,
-        parentesco: cuidForm.parentesco,
-        telefono: cuidForm.telefono,
-        correo: cuidForm.correo,
-      });
-      setShowModal(false);
-      setCuidForm({ nombre: '', parentesco: '', telefono: '', correo: '' });
-      await reloadCuidadores();
-    } catch (err: any) {
-      setCuidError(err?.message || 'Error al crear cuidador');
-    } finally {
-      setCuidLoading(false);
-    }
+    crearCuidadorMutation.mutate();
   };
 
-  const handleShowCredenciales = async (cuidador: CuidadorResponse) => {
-    setShowCredenciales(cuidador);
-    try {
-      const res = await httpClient.get(`/api/Cuidadores/${cuidador.id}/qr`);
-      setQrCode(res.data?.codigoAccesoQr || cuidador.codigoAccesoQr);
-    } catch (err) {
-      console.warn('Error al obtener QR actualizado, usando valor en caché:', err);
-      setQrCode(cuidador.codigoAccesoQr);
-    }
-  };
-
-  const handleRegenerarQR = async (cuidador: CuidadorResponse) => {
-    try {
-      const res = await httpClient.post(`/api/Cuidadores/${cuidador.id}/regenerar-qr`);
-      setQrCode(res.data?.codigoAccesoQr || '');
-    } catch (err) {
-      console.error('Error al regenerar QR:', err);
-    }
+  const handleSaveEdit = () => {
+    if (!editCuidador || !editForm.nombre || !editForm.parentesco) return;
+    editarCuidadorMutation.mutate();
   };
 
   const handleOpenEdit = (cuidador: CuidadorResponse) => {
@@ -182,15 +164,8 @@ export default function SeguridadPage() {
     setEditForm({ nombre: cuidador.nombre, parentesco: cuidador.parentesco });
   };
 
-  const handleSaveEdit = async () => {
-    if (!editCuidador || !editForm.nombre || !editForm.parentesco) return;
-    try {
-      await cuidadorService.editar(editCuidador.id, editForm);
-      setEditCuidador(null);
-      await reloadCuidadores();
-    } catch (err) {
-      console.error('Error al editar cuidador:', err);
-    }
+  const handleShowCredenciales = (cuidador: CuidadorResponse) => {
+    setShowCredenciales(cuidador);
   };
 
   const getStatusBadge = (accion: string) => {
@@ -207,7 +182,7 @@ export default function SeguridadPage() {
     return <Activity size={14} />;
   };
 
-  if (loading && !perfil && !paciente) return <LoadingSpinner />;
+  if (perfilQuery.isLoading && pacienteQuery.isLoading) return <LoadingSpinner />;
 
   return (
     <div className={styles.page}>
@@ -228,7 +203,7 @@ export default function SeguridadPage() {
           <div className={styles.cipherIcon}>
             <Lock size={32} />
           </div>
-          <div className={styles.cipherLabel}>Cifrado de extremo a extremo</div>
+          <div className={styles.cipherLabel}>Conexión HTTPS y acceso autorizado</div>
           <div className={styles.cipherValue}>256-bit</div>
           <div className={styles.cipherDesc}>
             Protocolo AES-256 con intercambio de claves HMAC-SHA256. Todos los datos biométricos están protegidos con cifrado de grado militar.
@@ -256,7 +231,7 @@ export default function SeguridadPage() {
                     <span className={styles.badgeDot} /> Vínculo principal
                   </div>
                 </div>
-                <div className={styles.patientActions}>
+                {canManageCaregivers && <div className={styles.patientActions}>
                   <button className={styles.actionBtn} onClick={() => setShowPatientQR(true)}>
                     <QrCode size={14} style={{ marginRight: 4 }} /> Ver QR
                   </button>
@@ -273,7 +248,7 @@ export default function SeguridadPage() {
                     {copied ? <Check size={14} style={{ marginRight: 4 }} /> : <Copy size={14} style={{ marginRight: 4 }} />}
                     {copied ? 'Copiado' : 'Copiar clave'}
                   </button>
-                </div>
+                </div>}
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: 24, color: '#8E9CB8' }}>
@@ -285,7 +260,7 @@ export default function SeguridadPage() {
           </div>
 
           {/* Bottom row */}
-          <div className={styles.bottomRow}>
+          {canManageCaregivers && <div className={styles.bottomRow}>
             {/* Caregiver */}
             <div className={styles.card}>
               {cuidadores.length > 0 ? (
@@ -313,9 +288,9 @@ export default function SeguridadPage() {
             {/* Add caregiver button */}
             <button className={styles.addCard} onClick={() => { if (paciente) setShowModal(true); }}>
               <UserPlus size={28} />
-Añadir Cuidador
+              Añadir Cuidador
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -367,42 +342,38 @@ Añadir Cuidador
         </table>
       </div>
 
-      {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => { if (!cuidLoading) setShowModal(false); }}>
-          <div style={{ background: '#111C2E', border: '1px solid rgba(45,156,255,0.2)', borderRadius: 20, padding: 28, maxWidth: 440, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }} onClick={e => e.stopPropagation()}>
+      {showModal && canManageCaregivers && (
+        <div role="presentation" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => { if (!crearCuidadorMutation.isPending) setShowModal(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="add-caregiver-title" style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 28, maxWidth: 440, width: '100%', boxShadow: 'var(--shadow-lg)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#F5F7FA' }}>Anadir Cuidador</h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: '#8E9CB8', cursor: 'pointer' }}><X size={20} /></button>
+              <h3 id="add-caregiver-title" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Añadir cuidador</h3>
+              <button type="button" aria-label="Cerrar" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <input placeholder="Nombre completo" value={cuidForm.nombre} onChange={e => setCuidForm({...cuidForm, nombre: e.target.value})} style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
-              <input placeholder="Parentesco (Madre, Padre, etc)" value={cuidForm.parentesco} onChange={e => setCuidForm({...cuidForm, parentesco: e.target.value})} style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
-              <input placeholder="Teléfono" value={cuidForm.telefono} onChange={e => setCuidForm({...cuidForm, telefono: e.target.value})} style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
-              <input placeholder="Correo electrónico" type="email" value={cuidForm.correo} onChange={e => setCuidForm({...cuidForm, correo: e.target.value})} style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
+              <input aria-label="Nombre completo" placeholder="Nombre completo" value={cuidForm.nombre} onChange={e => setCuidForm({...cuidForm, nombre: e.target.value})} maxLength={120} autoComplete="name" style={{ padding: '10px 14px', background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)', fontSize: '0.88rem' }} />
+              <input aria-label="Parentesco" placeholder="Parentesco (Madre, Padre, etc)" value={cuidForm.parentesco} onChange={e => setCuidForm({...cuidForm, parentesco: e.target.value})} maxLength={80} autoComplete="off" style={{ padding: '10px 14px', background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)', fontSize: '0.88rem' }} />
+              <input aria-label="Teléfono" placeholder="Teléfono" type="tel" inputMode="tel" value={cuidForm.telefono} onChange={e => setCuidForm({...cuidForm, telefono: e.target.value})} maxLength={20} autoComplete="tel" style={{ padding: '10px 14px', background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)', fontSize: '0.88rem' }} />
+              <input aria-label="Correo electrónico" placeholder="Correo electrónico" type="email" value={cuidForm.correo} onChange={e => setCuidForm({...cuidForm, correo: e.target.value})} maxLength={254} autoComplete="email" style={{ padding: '10px 14px', background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)', fontSize: '0.88rem' }} />
               {cuidError && <span style={{ color: '#ff5252', fontSize: '0.82rem' }}>{cuidError}</span>}
-              <button onClick={handleAddCaregiver} disabled={cuidLoading} style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #2D9CFF, #8FD7FF)', border: 'none', borderRadius: 12, color: '#07111D', cursor: cuidLoading ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', fontSize: '0.9rem', fontWeight: 600, marginTop: 4, opacity: cuidLoading ? 0.7 : 1 }}>
-                {cuidLoading ? 'Guardando...' : 'Guardar Cuidador'}
+              <button onClick={handleAddCaregiver} disabled={crearCuidadorMutation.isPending} style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #2D9CFF, #8FD7FF)', border: 'none', borderRadius: 12, color: '#07111D', cursor: crearCuidadorMutation.isPending ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', fontSize: '0.9rem', fontWeight: 600, marginTop: 4, opacity: crearCuidadorMutation.isPending ? 0.7 : 1 }}>
+                {crearCuidadorMutation.isPending ? 'Guardando...' : 'Guardar Cuidador'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {showCredenciales && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => { setShowCredenciales(null); setCuidCopied(false); }}>
-          <div style={{ background: '#111C2E', border: '1px solid rgba(45,156,255,0.2)', borderRadius: 20, padding: 28, maxWidth: 400, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+      {showCredenciales && canManageCaregivers && (
+        <div role="presentation" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => { setShowCredenciales(null); setCuidCopied(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="caregiver-credentials-title" style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 28, maxWidth: 400, width: '100%', boxShadow: 'var(--shadow-lg)', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#F5F7FA' }}>Credenciales de Acceso</h3>
-              <button onClick={() => { setShowCredenciales(null); setCuidCopied(false); }} style={{ background: 'none', border: 'none', color: '#8E9CB8', cursor: 'pointer' }}><X size={20} /></button>
+              <h3 id="caregiver-credentials-title" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Credenciales de acceso</h3>
+              <button type="button" aria-label="Cerrar" onClick={() => { setShowCredenciales(null); setCuidCopied(false); }} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={20} /></button>
             </div>
             <div style={{ marginBottom: 8, color: '#F5F7FA', fontWeight: 600, fontSize: '0.95rem' }}>{showCredenciales.nombre}</div>
             <div style={{ fontSize: '0.8rem', color: '#8E9CB8', marginBottom: 20 }}>Escanee este QR desde la app móvil para iniciar sesión</div>
             <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, display: 'inline-block' }}>
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(QR_LOGIN_URL + qrCode)}`}
-                alt="QR de acceso"
-                style={{ display: 'block', borderRadius: 8 }}
-              />
+              <QRCodeSVG value={QR_LOGIN_URL + qrCode} size={180} level="H" title="QR de acceso" />
             </div>
             <div style={{ background: 'rgba(45,156,255,0.06)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
               <div style={{ fontSize: '0.78rem', color: '#8E9CB8', marginBottom: 6 }}>Código de acceso</div>
@@ -412,42 +383,38 @@ Añadir Cuidador
               <button onClick={() => { navigator.clipboard.writeText(qrCode); setCuidCopied(true); setTimeout(() => setCuidCopied(false), 2000); }} className={styles.smallBtn} style={{ padding: '8px 16px', fontSize: '0.85rem', background: cuidCopied ? 'rgba(0,230,118,0.15)' : '', borderColor: cuidCopied ? '#00e676' : '', color: cuidCopied ? '#00e676' : '' }}>
                 {cuidCopied ? 'Copiado!' : 'Copiar código'}
               </button>
-              <button onClick={() => handleRegenerarQR(showCredenciales)} className={styles.smallBtn} style={{ padding: '8px 16px', fontSize: '0.85rem' }}>Regenerar QR</button>
+              <button onClick={() => regenerarQrMutation.mutate()} className={styles.smallBtn} style={{ padding: '8px 16px', fontSize: '0.85rem' }}>Regenerar QR</button>
             </div>
           </div>
         </div>
       )}
 
-      {editCuidador && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setEditCuidador(null)}>
-          <div style={{ background: '#111C2E', border: '1px solid rgba(45,156,255,0.2)', borderRadius: 20, padding: 28, maxWidth: 400, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }} onClick={e => e.stopPropagation()}>
+      {editCuidador && canManageCaregivers && (
+        <div role="presentation" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setEditCuidador(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="edit-caregiver-title" style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 28, maxWidth: 400, width: '100%', boxShadow: 'var(--shadow-lg)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#F5F7FA' }}>Editar Cuidador</h3>
-              <button onClick={() => setEditCuidador(null)} style={{ background: 'none', border: 'none', color: '#8E9CB8', cursor: 'pointer' }}><X size={20} /></button>
+              <h3 id="edit-caregiver-title" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Editar cuidador</h3>
+              <button type="button" aria-label="Cerrar" onClick={() => setEditCuidador(null)} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <input placeholder="Nombre" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
-              <input placeholder="Parentesco" value={editForm.parentesco} onChange={e => setEditForm({...editForm, parentesco: e.target.value})} style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
+              <input aria-label="Nombre del cuidador" placeholder="Nombre" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} maxLength={120} autoComplete="name" style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
+              <input aria-label="Parentesco del cuidador" placeholder="Parentesco" value={editForm.parentesco} onChange={e => setEditForm({...editForm, parentesco: e.target.value})} maxLength={80} autoComplete="off" style={{ padding: '10px 14px', background: 'rgba(45,156,255,0.04)', border: '1px solid rgba(45,156,255,0.15)', borderRadius: 10, color: '#F5F7FA', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', outline: 'none' }} />
               <button onClick={handleSaveEdit} style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #2D9CFF, #8FD7FF)', border: 'none', borderRadius: 12, color: '#07111D', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '0.9rem', fontWeight: 600, marginTop: 4 }}>Guardar cambios</button>
             </div>
           </div>
         </div>
       )}
 
-      {showPatientQR && paciente && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => { setShowPatientQR(false); setPatCopied(false); }}>
-          <div style={{ background: '#111C2E', border: '1px solid rgba(45,156,255,0.2)', borderRadius: 20, padding: 28, maxWidth: 400, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+      {showPatientQR && paciente && canManageCaregivers && (
+        <div role="presentation" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => { setShowPatientQR(false); setPatCopied(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="patient-qr-title" style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 28, maxWidth: 400, width: '100%', boxShadow: 'var(--shadow-lg)', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#F5F7FA' }}>QR de Acceso - {paciente.nombre}</h3>
-              <button onClick={() => { setShowPatientQR(false); setPatCopied(false); }} style={{ background: 'none', border: 'none', color: '#8E9CB8', cursor: 'pointer' }}><X size={20} /></button>
+              <h3 id="patient-qr-title" style={{ fontSize: '1.1rem', fontWeight: 600 }}>QR de acceso - {paciente.nombre}</h3>
+              <button type="button" aria-label="Cerrar" onClick={() => { setShowPatientQR(false); setPatCopied(false); }} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={20} /></button>
             </div>
             <div style={{ fontSize: '0.8rem', color: '#8E9CB8', marginBottom: 20 }}>Escanea este QR en la app movil para vincular al paciente</div>
             <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, display: 'inline-block' }}>
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(QR_LOGIN_URL + pacienteQR)}`}
-                alt="QR del paciente"
-                style={{ display: 'block', borderRadius: 8 }}
-              />
+              <QRCodeSVG value={QR_LOGIN_URL + pacienteQR} size={180} level="H" title="QR del paciente" />
             </div>
             <div style={{ background: 'rgba(45,156,255,0.06)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
               <div style={{ fontSize: '0.78rem', color: '#8E9CB8', marginBottom: 6 }}>Clave de acceso</div>

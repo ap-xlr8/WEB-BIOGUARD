@@ -1,4 +1,5 @@
 import httpClient from '../utils/httpClient';
+import type { AxiosRequestConfig } from 'axios';
 import {
   LecturaSensorResponse,
   EstadisticasResponse,
@@ -22,7 +23,7 @@ export const sensorService = {
     return data;
   },
 
-  getEstadisticas: async (pacienteId: string, config?: any): Promise<EstadisticasResponse> => {
+  getEstadisticas: async (pacienteId: string, config?: AxiosRequestConfig): Promise<EstadisticasResponse> => {
     const { data } = await httpClient.get<EstadisticasResponse>(
       `/api/Sensores/estadisticas/${pacienteId}`,
       config
@@ -30,7 +31,7 @@ export const sensorService = {
     return data;
   },
 
-  getTendencia: async (pacienteId: string, periodo = 'semanal', config?: any): Promise<TendenciaItem[]> => {
+  getTendencia: async (pacienteId: string, periodo = 'semanal', config?: AxiosRequestConfig): Promise<TendenciaItem[]> => {
     const { data } = await httpClient.get<TendenciaItem[]>(
       `/api/Sensores/estadisticas/${pacienteId}/tendencia?periodo=${periodo}`,
       config
@@ -38,7 +39,7 @@ export const sensorService = {
     return data;
   },
 
-  getEventos: async (pacienteId: string, limite = 50, config?: any): Promise<EventoMetabolicoResponse[]> => {
+  getEventos: async (pacienteId: string, limite = 50, config?: AxiosRequestConfig): Promise<EventoMetabolicoResponse[]> => {
     const { data } = await httpClient.get<EventoMetabolicoResponse[]>(
       `/api/Sensores/eventos/${pacienteId}?limite=${limite}`,
       config
@@ -91,7 +92,7 @@ export const reporteService = {
     return data;
   },
 
-  getHistorialMedicamentos: async (pacienteId: string, config?: any) => {
+  getHistorialMedicamentos: async (pacienteId: string, config?: AxiosRequestConfig) => {
     const { data } = await httpClient.get(`/api/Reportes/historial-medicamentos/${pacienteId}`, config);
     return data;
   },
@@ -108,12 +109,12 @@ export const mlService = {
     return data;
   },
 
-  getPrediccionActual: async (pacienteId: string, config?: any) => {
+  getPrediccionActual: async (pacienteId: string, config?: AxiosRequestConfig) => {
     const { data } = await httpClient.get(`/api/ML/predicciones/${pacienteId}/actual`, config);
     return data;
   },
 
-  getRecomendaciones: async (pacienteId: string, config?: any) => {
+  getRecomendaciones: async (pacienteId: string, config?: AxiosRequestConfig) => {
     const { data } = await httpClient.get(`/api/ML/recomendaciones/${pacienteId}`, config);
     return data;
   },

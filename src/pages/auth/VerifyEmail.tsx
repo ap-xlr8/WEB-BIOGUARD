@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, LoadingSpinner } from '../../components/ui';
 import { AuthLayout } from '../../components/layout';
 import { authService } from '../../services';
-import { ROUTES, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../../constants';
+import { ROUTES, USER_KEY } from '../../constants';
+import { setAccessToken } from '../../utils/session';
 import styles from './Auth.module.css';
 
 export default function VerifyEmailPage() {
@@ -57,11 +58,11 @@ export default function VerifyEmailPage() {
     setError('');
     try {
       const res = await authService.verificar2FA({ correo, codigo: fullCode });
-      localStorage.setItem(TOKEN_KEY, res.token);
-      localStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken || '');
-      localStorage.setItem(USER_KEY, JSON.stringify(res));
+      setAccessToken(res.token);
+      const safeUser = { ...res, token: '', refreshToken: undefined };
+      localStorage.setItem(USER_KEY, JSON.stringify(safeUser));
       setSuccess(true);
-      setTimeout(() => window.location.replace(ROUTES.DASHBOARD), 1500);
+      setTimeout(() => window.location.replace(res.rol === 'administrador' ? ROUTES.ADMIN_DASHBOARD : ROUTES.DASHBOARD), 1500);
     } catch {
       setError('Codigo invalido o expirado');
     } finally { setLoading(false); }
@@ -108,7 +109,7 @@ export default function VerifyEmailPage() {
 
         <div style={{ textAlign: 'center', marginTop: 12 }}>
           <button onClick={handleResend} disabled={resendTimer > 0 || loading || success}
-            style={{ background: 'none', border: 'none', color: resendTimer > 0 ? 'var(--color-text-muted)' : 'var(--color-cyan)', cursor: resendTimer > 0 ? 'default' : 'pointer', fontSize: '0.85rem', fontFamily: 'var(--font-sans)' }}>
+            style={{ background: 'none', border: 'none', color: resendTimer > 0 ? 'var(--color-text-muted)' : 'var(--color-blue)', cursor: resendTimer > 0 ? 'default' : 'pointer', fontSize: '0.85rem', fontFamily: 'var(--font-sans)' }}>
             {resendTimer > 0 ? `Reenviar en ${resendTimer}s` : 'Reenviar codigo'}
           </button>
         </div>

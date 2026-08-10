@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /salud
+Disallow: /seguridad
+Disallow: /facturacion
+Disallow: /ajustes
+Disallow: /soporte
+Disallow: /admin/

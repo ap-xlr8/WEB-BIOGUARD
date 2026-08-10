@@ -3,7 +3,7 @@ import { PlanResponse, CrearSesionPagoRequest, CrearSesionPagoResponse, PagoResp
 
 export const planService = {
   listar: async (): Promise<PlanResponse[]> => {
-    const { data } = await httpClient.get<PlanResponse[]>('/api/Planes');
+    const { data } = await httpClient.get<PlanResponse[]>('/api/Planes', { timeout: 5_000 });
     return data;
   },
 

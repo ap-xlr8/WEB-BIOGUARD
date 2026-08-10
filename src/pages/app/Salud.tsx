@@ -1,63 +1,84 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Heart, Thermometer, Droplets, Brain, FileText, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
-import { jsPDF } from 'jspdf';
+import { ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts';
 import { LoadingSpinner } from '../../components/ui';
 import { sensorService, reporteService, mlService, pacienteService } from '../../services';
+import { LecturaSensorResponse } from '../../types';
 import httpClient from '../../utils/httpClient';
 import { useAuth } from '../../context';
-import { EstadisticasResponse, TendenciaItem, EventoMetabolicoResponse, PacienteResponse } from '../../types';
 import styles from './Salud.module.css';
+import { APP_PERMISSIONS, hasPermission } from '../../auth/authorization';
+
 
 type Periodo = '7d' | '30d' | 'historial';
+type FilaReporte = [string, number, number, number, number];
 
 export default function SaludPage() {
-  const { user } = useAuth();
+  const { user, access } = useAuth();
   const [periodo, setPeriodo] = useState<Periodo>('7d');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [stats, setStats] = useState<EstadisticasResponse | null>(null);
-  const [tendencias, setTendencias] = useState<TendenciaItem[]>([]);
-  const [eventos, setEventos] = useState<EventoMetabolicoResponse[]>([]);
-  const [paciente, setPaciente] = useState<PacienteResponse | null>(null);
-  const [recomendaciones, setRecomendaciones] = useState<string[]>([]);
-  const [prediccionActual, setPrediccionActual] = useState<any>(null);
-  const [medicamentos, setMedicamentos] = useState<any[]>([]);
-  const [reportLoading, setReportLoading] = useState(false);
   const [reportMsg, setReportMsg] = useState('');
+  const canReadHistory = hasPermission(access, APP_PERMISSIONS.HEALTH_HISTORY);
+  const canExportReports = hasPermission(access, APP_PERMISSIONS.REPORT_EXPORT);
+  const canReadMedication = hasPermission(access, APP_PERMISSIONS.MEDICATION_READ);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const load = async () => {
-      try {
-        setError('');
-        const pac = await pacienteService.miPaciente({ signal: controller.signal });
-        if (!pac) { setLoading(false); return; }
-        setPaciente(pac);
-        const p = periodo === '7d' ? 'semanal' : periodo === '30d' ? 'mensual' : 'mensual';
-        const [s, t, ev, rec, pred, med] = await Promise.all([
-          sensorService.getEstadisticas(pac.id, { signal: controller.signal }),
-          sensorService.getTendencia(pac.id, p, { signal: controller.signal }),
-          sensorService.getEventos(pac.id, 20, { signal: controller.signal }),
-          mlService.getRecomendaciones(pac.id, { signal: controller.signal }).catch(() => null),
-          mlService.getPrediccionActual(pac.id, { signal: controller.signal }).catch(() => null),
-          reporteService.getHistorialMedicamentos(pac.id, { signal: controller.signal }).catch(() => []),
-        ]);
-        setStats(s);
-        setTendencias(t);
-        setEventos(ev);
-        if (rec && rec.recomendaciones) setRecomendaciones(rec.recomendaciones);
-        if (pred && pred.probabilidad !== undefined) setPrediccionActual(pred);
-        setMedicamentos(med || []);
-      } catch (err: any) {
-        if (err?.name === 'CanceledError' || err?.message === 'canceled') return;
-        setError(err?.message || 'Error al cargar los datos de salud. Intenta de nuevo.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-    return () => { controller.abort(); };
-  }, [periodo]);
+  const pacienteQuery = useQuery({
+    queryKey: ['paciente'],
+    queryFn: () => access?.pacienteId
+      ? pacienteService.getById(access.pacienteId)
+      : pacienteService.miPaciente(),
+  });
+  const paciente = pacienteQuery.data ?? null;
+  const pacienteId = paciente?.id;
+
+  const p = periodo === '7d' ? 'semanal' : 'mensual';
+
+  const statsQuery = useQuery({
+    queryKey: ['estadisticas', pacienteId],
+    queryFn: () => sensorService.getEstadisticas(pacienteId!),
+    enabled: !!pacienteId && (periodo !== 'historial' || canReadHistory),
+  });
+  const tendenciasQuery = useQuery({
+    queryKey: ['tendencia', pacienteId, p],
+    queryFn: () => sensorService.getTendencia(pacienteId!, p),
+    enabled: !!pacienteId && canReadHistory,
+  });
+  const eventosQuery = useQuery({
+    queryKey: ['eventos', pacienteId],
+    queryFn: () => sensorService.getEventos(pacienteId!, 20),
+    enabled: !!pacienteId,
+  });
+  const recomendacionesQuery = useQuery({
+    queryKey: ['recomendaciones', pacienteId],
+    queryFn: (): Promise<string[]> => mlService.getRecomendaciones(pacienteId!).then((r) => (Array.isArray(r?.recomendaciones) ? r.recomendaciones : [])),
+    enabled: !!pacienteId,
+  });
+  const prediccionQuery = useQuery({
+    queryKey: ['prediccion', pacienteId],
+    queryFn: () => mlService.getPrediccionActual(pacienteId!),
+    enabled: !!pacienteId && canReadHistory && canReadMedication,
+  });
+  const medicamentosQuery = useQuery({
+    queryKey: ['medicamentos-historial', pacienteId],
+    queryFn: () => reporteService.getHistorialMedicamentos(pacienteId!).then((r) => (Array.isArray(r) ? r : [])),
+    enabled: !!pacienteId,
+  });
+
+  const stats = statsQuery.data ?? null;
+  const tendencias = tendenciasQuery.data ?? [];
+  const eventos = eventosQuery.data ?? [];
+  const recomendaciones = recomendacionesQuery.data ?? [];
+  const prediccionActual = prediccionQuery.data ?? null;
+  const medicamentos = medicamentosQuery.data ?? [];
+
+  const failed: string[] = [];
+  if (pacienteQuery.isError) failed.push('Datos del paciente');
+  if (statsQuery.isError) failed.push('Estadísticas');
+  if (tendenciasQuery.isError) failed.push('Tendencias');
+  if (eventosQuery.isError) failed.push('Eventos metabólicos');
+  const loadError = failed.length > 0
+    ? `No se pudieron cargar algunas secciones: ${failed.join(', ')}. Verifica tu conexión.`
+    : '';
 
   const getNivelClass = (n: string) => {
     if (!n) return styles.levelNormal;
@@ -67,16 +88,12 @@ export default function SaludPage() {
     return styles.levelNormal;
   };
 
-  const chartData = tendencias.length ? {
-    pulso: tendencias.map((d, i) => ({ x: (i / Math.max(tendencias.length - 1, 1)) * 100, y: 100 - (d.pulsoBpm / 200) * 100 })),
-    temp: tendencias.map((d, i) => ({ x: (i / Math.max(tendencias.length - 1, 1)) * 100, y: 100 - ((d.temperaturaC - 30) / 15) * 100 })),
-  } : null;
+  const tieneDatos = stats && typeof stats.ultimoPulso === 'number';
 
-  const handleExportPDF = async () => {
-    if (!paciente) return;
-    setReportLoading(true);
-    setReportMsg('');
-    try {
+  const reportMutation = useMutation({
+    mutationFn: async () => {
+      if (!paciente) return;
+      const { jsPDF } = await import('jspdf');
       const ahora = new Date();
       let desde: Date;
       if (periodo === '7d') desde = new Date(ahora.getTime() - 7 * 86400000);
@@ -85,9 +102,11 @@ export default function SaludPage() {
 
       const desdeStr = desde.toISOString();
       const hastaStr = ahora.toISOString();
-      const response = await httpClient.get(`/api/Sensores/lecturas/${paciente.id}/rango?desde=${desdeStr}&hasta=${hastaStr}`);
-      const lecturas = response.data as any[];
-      const dataRows = Array.isArray(lecturas) ? lecturas.map((l: any) => [l.timestamp, l.pulsoBpm, l.temperaturaC, l.sudoracionGsr, l.probabilidadPico]) : [];
+      const response = await httpClient.get<LecturaSensorResponse[]>(`/api/Sensores/lecturas/${paciente.id}/rango?desde=${desdeStr}&hasta=${hastaStr}`);
+      const lecturas = response.data;
+      const dataRows: FilaReporte[] = Array.isArray(lecturas)
+        ? lecturas.map((l): FilaReporte => [l.timestamp, l.pulsoBpm, l.temperaturaC, l.sudoracionGsr, l.probabilidadPico])
+        : [];
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const w = pdf.internal.pageSize.getWidth();
@@ -159,7 +178,7 @@ export default function SaludPage() {
           const cols = row;
           if (cols.length >= 4) {
             const ts = cols[0].length > 15 ? cols[0].slice(11, 19) : cols[0];
-            const vals = [ts, cols[1] || '', cols[2] || '', cols[3] || '', cols[4] || ''];
+            const vals: string[] = [ts, String(cols[1] ?? ''), String(cols[2] ?? ''), String(cols[3] ?? ''), String(cols[4] ?? '')];
             vals.forEach((c, ci) => {
               const x = 15 + colWs.slice(0, ci).reduce((a, b) => a + b, 0);
               pdf.text(c, x + 2, y + 4.5);
@@ -174,32 +193,23 @@ export default function SaludPage() {
       }
 
       pdf.save(`reporte-bioguard-${paciente.nombre.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+    },
+    onMutate: () => setReportMsg(''),
+    onSuccess: () => {
       setReportMsg('PDF descargado exitosamente');
       setTimeout(() => setReportMsg(''), 3000);
-    } catch (err: any) {
-      console.error('Error reporte:', err);
+    },
+    onError: () => {
       setReportMsg('Error al generar el reporte');
       setTimeout(() => setReportMsg(''), 3000);
-    } finally {
-      setReportLoading(false);
-    }
+    },
+  });
+
+  const handleExportPDF = () => {
+    if (canExportReports) reportMutation.mutate();
   };
 
-  if (loading) return <LoadingSpinner />;
-
-  if (error) {
-    return (
-      <div style={{ padding: '40px 24px', textAlign: 'center', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', borderRadius: 12, color: '#ef4444', maxWidth: 500, margin: '40px auto' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 8 }}>Error al cargar los datos</h2>
-        <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: 20 }}>{error}</p>
-        <button onClick={() => window.location.reload()} style={{ padding: '10px 20px', background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
-          Reintentar
-        </button>
-      </div>
-    );
-  }
-
-  const tieneDatos = stats && typeof stats.ultimoPulso === 'number';
+  if (pacienteQuery.isLoading) return <LoadingSpinner />;
 
   const pulsoTrend = tieneDatos ? (stats.ultimoPulso > stats.promedioPulso * 1.05 ? 'up' : stats.ultimoPulso < stats.promedioPulso * 0.95 ? 'down' : 'stable') : 'stable';
 
@@ -212,19 +222,25 @@ export default function SaludPage() {
         </p>
       </div>
 
+      {loadError && (
+        <div style={{ marginBottom: 16, padding: '12px 18px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 10, color: '#ef4444', fontSize: '0.85rem' }}>
+          {loadError}
+        </div>
+      )}
+
       <div className={styles.headerRow}>
         <div className={styles.periodSelector}>
-          {(['7d','30d','historial'] as Periodo[]).map((p) => (
+          {((canReadHistory ? ['7d','30d','historial'] : ['7d','30d']) as Periodo[]).map((p) => (
             <button key={p} className={`${styles.periodBtn} ${periodo === p ? styles.periodBtnActive : ''}`} onClick={() => setPeriodo(p)}>
               {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : 'Historial'}
             </button>
           ))}
         </div>
-        <button onClick={handleExportPDF}
-          style={{ display:'flex',alignItems:'center',gap:8,padding:'8px 18px',background:'var(--gradient-cyan-blue)',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'0.85rem',fontWeight:500,opacity:reportLoading||!paciente?0.6:1 }}
-          disabled={!paciente || reportLoading}>
-          <FileText size={16} /> {reportLoading ? 'Generando...' : 'Generar reporte completo'}
-        </button>
+        {canExportReports && <button onClick={handleExportPDF}
+          style={{ display:'flex',alignItems:'center',gap:8,padding:'8px 18px',background:'var(--gradient-cyan-blue)',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'0.85rem',fontWeight:500,opacity:reportMutation.isPending||!paciente?0.6:1 }}
+          disabled={!paciente || reportMutation.isPending}>
+          <FileText size={16} /> {reportMutation.isPending ? 'Generando...' : 'Generar reporte completo'}
+        </button>}
       </div>
 
       {reportMsg && (
@@ -247,11 +263,17 @@ export default function SaludPage() {
           </div>
           <div className={styles.bigValue}>{tieneDatos && stats.ultimoPulso ? stats.ultimoPulso : '--'}<span className={styles.bigUnit}>BPM</span></div>
           <div className={styles.subValue}>Promedio: {stats?.promedioPulso ? Math.round(stats.promedioPulso) : '--'} BPM</div>
-          {chartData && (
-            <div className={styles.chartArea}>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width:'100%',height:'100%' }}>
-                <polyline fill="none" stroke="var(--color-danger)" strokeWidth="0.25" vectorEffect="non-scaling-stroke" points={chartData.pulso.map(p => `${p.x},${p.y}`).join(' ')} />
-              </svg>
+          {tendencias.length > 0 && (
+            <div className={styles.chartArea} style={{ height: 60, width: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={tendencias}>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border)', borderRadius: 8, fontSize: 11 }}
+                    formatter={(val) => [`${val} BPM`, 'Pulso']}
+                  />
+                  <Area type="monotone" dataKey="pulsoBpm" stroke="#ef4444" fill="rgba(239, 68, 68, 0.15)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           )}
         </div>
@@ -264,17 +286,24 @@ export default function SaludPage() {
             </div>
             <span className={`${styles.trendBadge} ${styles.trendStable}`}><Minus size={14} />{tieneDatos ? 'Normal' : 'Sin datos'}</span>
           </div>
-          <div className={styles.bigValue}>{stats?.ultimaTemperatura?.toFixed(1) ?? '--'}<span className={styles.bigUnit}>C</span></div>
-          <div className={styles.subValue}>Promedio: {stats?.promedioTemperatura?.toFixed(1) ?? '--'} C</div>
-          {chartData && (
-            <div className={styles.chartArea}>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width:'100%',height:'100%' }}>
-                <polyline fill="none" stroke="var(--color-cyan)" strokeWidth="0.25" vectorEffect="non-scaling-stroke" points={chartData.temp.map(p => `${p.x},${p.y}`).join(' ')} />
-              </svg>
+          <div className={styles.bigValue}>{stats?.ultimaTemperatura?.toFixed(1) ?? '--'}<span className={styles.bigUnit}>°C</span></div>
+          <div className={styles.subValue}>Promedio: {stats?.promedioTemperatura?.toFixed(1) ?? '--'} °C</div>
+          {tendencias.length > 0 && (
+            <div className={styles.chartArea} style={{ height: 60, width: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={tendencias}>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border)', borderRadius: 8, fontSize: 11 }}
+                    formatter={(val) => [`${val} °C`, 'Temperatura']}
+                  />
+                  <Area type="monotone" dataKey="temperaturaC" stroke="#06b6d4" fill="rgba(6, 182, 212, 0.15)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           )}
         </div>
       </div>
+
 
       <div className={styles.grid3}>
         <div className={styles.healthCard}>
@@ -359,7 +388,7 @@ export default function SaludPage() {
             <div style={{ padding:20,textAlign:'center',color:'var(--color-text-muted)',fontSize:'0.85rem' }}>Sin medicamentos registrados</div>
           ) : (
             <div className={styles.medList}>
-              {medicamentos.map((m: any) => (
+              {medicamentos.map((m) => (
                 <div key={m.id} className={styles.medItem}>
                   <div className={styles.medInfo}>
                     <span className={styles.medName}>{m.nombre}</span>

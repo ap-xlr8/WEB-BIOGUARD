@@ -93,6 +93,17 @@ export interface PlanResponse {
   gpsContinuo: boolean;
   aiConsole: boolean;
   descripcion: string;
+  guardianNocturnoDisponible: boolean;
+  exportacionReportesDisponible: boolean;
+}
+
+export interface EffectiveAccessResponse {
+  rol: string;
+  pacienteId: string | null;
+  nivelAccesoCuidador: string | null;
+  cuidadorDentroDelPlan: boolean;
+  plan: PlanResponse | null;
+  permisos: string[];
 }
 
 // ── Paciente ──
@@ -266,7 +277,6 @@ export interface NotificacionResponse {
 export interface CrearSesionPagoRequest {
   planNombre: string;
   procesador?: string;
-  periodo?: BillingPeriod;
 }
 
 export interface PagoResponse {
@@ -410,5 +420,3 @@ export interface ApiError {
   message: string;
   status?: number;
 }
-
-export type BillingPeriod = 'mensual' | 'anual';

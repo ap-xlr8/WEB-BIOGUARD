@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { Button } from './Button';
 import { pacienteService } from '../../services';
 import styles from './PacienteModal.module.css';
+import { getErrorMessage } from '../../utils/errors';
 
 interface PacienteModalProps {
   open: boolean;
@@ -42,6 +43,7 @@ export function PacienteModal({ open, onClose, onCreated }: PacienteModalProps) 
 
   const handleSave = async () => {
     if (!nombre.trim()) { setError('El nombre es obligatorio'); return; }
+    if (nombre.trim().length > 120) { setError('El nombre no debe superar 120 caracteres'); return; }
     setLoading(true);
     setError('');
     try {
@@ -50,8 +52,8 @@ export function PacienteModal({ open, onClose, onCreated }: PacienteModalProps) 
       if (res.codigoAccesoQr) setQrCode(res.codigoAccesoQr);
       onCreated();
       setTimeout(() => { onClose(); setSuccess(false); }, 2000);
-    } catch (err: any) {
-      setError(err?.message || 'Error al crear el paciente');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error al crear el paciente'));
     } finally {
       setLoading(false);
     }
@@ -90,6 +92,8 @@ export function PacienteModal({ open, onClose, onCreated }: PacienteModalProps) 
                 placeholder="Ej. Juan Perez"
                 value={nombre}
                 onChange={(e) => { setNombre(e.target.value); setError(''); }}
+                maxLength={120}
+                autoComplete="name"
                 onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                 disabled={loading}
               />

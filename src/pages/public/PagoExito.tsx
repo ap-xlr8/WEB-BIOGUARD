@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Check, ArrowRight, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { ROUTES } from '../../constants';
 import { useAuth } from '../../context';
 import { pagoService } from '../../services';
@@ -11,25 +11,48 @@ export default function PagoExitoPage() {
   const [pago, setPago] = useState<PagoResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const MAX_ATTEMPTS = 10;
+  const INTERVAL_MS = 3000;
+
   useEffect(() => {
     if (!isAuthenticated) {
       setLoading(false);
       return;
     }
+    
+    // Initial fetch of payment history
     pagoService
       .historial()
       .then((p) => setPago(p?.[0] ?? null))
       .catch(() => {})
       .finally(() => {
         setLoading(false);
-        refreshPlan();
       });
+
+    // Polling for plan update
+    let attempts = 0;
+    pollingRef.current = setInterval(async () => {
+        attempts++;
+        try {
+            await refreshPlan();
+            // Si el plan cambió, se reflejará en el contexto. 
+            // Como no tenemos el plan previo aquí fácil, simplemente hacemos polling un rato.
+        } catch { /* continuar */ }
+        if (attempts >= MAX_ATTEMPTS) {
+            clearInterval(pollingRef.current!);
+        }
+    }, INTERVAL_MS);
+    
+    return () => {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+    };
   }, [isAuthenticated, refreshPlan]);
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07111D' }}>
-        <Loader2 size={32} style={{ color: '#2D9CFF', animation: 'spin 1s linear infinite' }} />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-primary)' }}>
+        <Loader2 size={32} style={{ color: 'var(--color-blue)', animation: 'spin 1s linear infinite' }} />
       </div>
     );
   }
@@ -39,11 +62,11 @@ export default function PagoExitoPage() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#07111D', padding: 24,
+      background: 'var(--color-bg-primary)', padding: 24,
     }}>
       <div style={{
-        maxWidth: 480, width: '100%', background: '#111C2E',
-        border: '1px solid rgba(45,156,255,0.1)', borderRadius: 20, padding: 40,
+        maxWidth: 480, width: '100%', background: 'var(--color-bg-card)',
+        border: '1px solid var(--color-border)', borderRadius: 8, padding: 40,
         textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
       }}>
         <div style={{
@@ -59,15 +82,15 @@ export default function PagoExitoPage() {
           fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase',
           letterSpacing: '0.1em', color: '#00e676', display: 'block', marginBottom: 8,
         }}>
-          Pago completado
+          Retorno del procesador recibido
         </span>
 
-        <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#F5F7FA', marginBottom: 12 }}>
-          Pago <span style={{ color: '#2D9CFF' }}>Exitoso</span>
+        <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 12 }}>
+          {pago ? 'Pago registrado' : 'Verificación pendiente'}
         </h1>
 
-        <p style={{ color: '#8E9CB8', fontSize: '0.88rem', marginBottom: 24, lineHeight: 1.5, maxWidth: 360, margin: '0 auto 24px' }}>
-          Tu suscripción está siendo activada. Recibirás una confirmación en cuanto el pago sea verificado.
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', marginBottom: 24, lineHeight: 1.5, maxWidth: 360, margin: '0 auto 24px' }}>
+          {pago ? 'El backend devolvió el registro más reciente de tu historial.' : 'No fue posible confirmar el pago desde el historial. Revisa tu facturación antes de reintentar.'}
         </p>
 
         {pago && (
@@ -91,17 +114,15 @@ export default function PagoExitoPage() {
           </div>
         )}
 
-        <Link to={destino} style={{ textDecoration: 'none' }}>
-          <button style={{
+        <Link to={destino} style={{
             width: '100%', padding: '14px 24px',
-            background: 'linear-gradient(135deg, #2D9CFF, #8FD7FF)',
-            border: 'none', borderRadius: 12, color: '#07111D',
+            background: 'var(--color-blue)',
+            border: 'none', borderRadius: 8, color: '#fff', textDecoration: 'none',
             cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '0.95rem',
             fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             transition: 'all 0.2s',
           }}>
             {isAuthenticated ? 'Ir al Dashboard' : 'Iniciar sesión'} <ArrowRight size={18} />
-          </button>
         </Link>
       </div>
     </div>

@@ -1,43 +1,53 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { API_BASE_URL, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../constants';
+import { API_BASE_URL, USER_KEY } from '../constants';
+import { clearAccessToken, getAccessToken, setAccessToken } from './session';
 
 const httpClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Helper function para leer cookies:
+function getCookie(name: string): string | null {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift() ?? null;
+    return null;
+}
+
 httpClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAccessToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    if (config.headers) {
+      config.headers['X-XSRF-TOKEN'] = getCookie('XSRF-TOKEN') ?? '';
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+export function clearSession() {
+  clearAccessToken();
   localStorage.removeItem(USER_KEY);
   window.dispatchEvent(new Event('bioguard:unauthorized'));
 }
 
 let refreshPromise: Promise<string | null> | null = null;
 
-async function tryRefreshToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-  if (!refreshToken) return null;
+export async function tryRefreshToken(): Promise<string | null> {
   try {
-    const { data } = await axios.post<{ accessToken: string; refreshToken?: string }>(
+    const { data } = await axios.post<{ accessToken: string }>(
       `${API_BASE_URL}/api/Auth/refresh`,
-      { refreshToken }
+      {},
+      { withCredentials: true, timeout: 15000 }
     );
     if (!data?.accessToken) return null;
-    localStorage.setItem(TOKEN_KEY, data.accessToken);
-    if (data.refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+    setAccessToken(data.accessToken);
     return data.accessToken;
   } catch {
     return null;

@@ -1,4 +1,5 @@
 import httpClient from '../utils/httpClient';
+import type { AxiosRequestConfig } from 'axios';
 import { CuidadorResponse, CrearCuidadorRequest, ActualizarCuidadorRequest, MessageResponse } from '../types';
 
 export const cuidadorService = {
@@ -7,7 +8,7 @@ export const cuidadorService = {
     return data;
   },
 
-  getByPaciente: async (pacienteId: string, config?: any): Promise<CuidadorResponse[]> => {
+  getByPaciente: async (pacienteId: string, config?: AxiosRequestConfig): Promise<CuidadorResponse[]> => {
     const { data } = await httpClient.get<CuidadorResponse[]>(`/api/Cuidadores/by-paciente/${pacienteId}`, config);
     return data;
   },

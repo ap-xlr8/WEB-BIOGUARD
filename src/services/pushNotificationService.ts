@@ -50,7 +50,6 @@ export const pushNotificationService = {
                 body,
                 icon: '/bioguard-icon-192.png',
                 badge: '/bioguard-badge-72.png',
-                vibrate: [200, 100, 200],
                 ...options,
             });
         }).catch(() => {

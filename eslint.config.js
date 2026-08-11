@@ -26,7 +26,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/components/ui/Toast.tsx', 'src/context/*Context.tsx'],
+    files: ['src/components/ui/Toast.tsx', 'src/context/*Context.tsx', 'src/routes/*.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },

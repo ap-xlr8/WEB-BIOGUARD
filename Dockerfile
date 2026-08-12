@@ -11,4 +11,5 @@ FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:44e36330f74d4f3a1d4e222acc
 ENV API_UPSTREAM=https://bioguard-api-lkvnq.ondigitalocean.app
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/templates/default.conf.template
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget --quiet --tries=1 --spider http://localhost:8080/web-health || exit 1
 EXPOSE 8080

@@ -34,6 +34,7 @@ httpClient.interceptors.request.use(
 export function clearSession() {
   clearAccessToken();
   localStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(USER_KEY);
   window.dispatchEvent(new Event('bioguard:unauthorized'));
 }
 
@@ -75,7 +76,12 @@ httpClient.interceptors.response.use(
       clearSession();
     }
 
-    const message = error.response?.data?.message || error.message || 'Error de conexión';
+    const rawMessage = error.response?.data?.message || error.message || 'Error de conexión';
+    const isInternalTrace = /(exception|stacktrace|sql|mongo|internal server error|at BioGuard\.)/i.test(rawMessage);
+    const message = isInternalTrace
+      ? 'Error de comunicación con el servidor. Por favor intente nuevamente.'
+      : rawMessage;
+
     return Promise.reject({ message, status });
   }
 );

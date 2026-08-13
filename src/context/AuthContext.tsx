@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const restore = async () => {
-      const stored = localStorage.getItem(USER_KEY);
+      const stored = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
       if (!stored) {
         if (active) {
           setIsLoading(false);
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!response.requires2FA) {
       setAccessToken(response.token);
       const safeUser = { ...response, token: '', refreshToken: undefined };
-      localStorage.setItem(USER_KEY, JSON.stringify(safeUser));
+      sessionStorage.setItem(USER_KEY, JSON.stringify(safeUser));
       setUser(safeUser);
       setIsAccessLoading(true);
       try {
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (response.token && response.token !== 'pending_verification' && !response.requiresVerification) {
       setAccessToken(response.token);
       const safeUser = { ...response, token: '', refreshToken: undefined };
-      localStorage.setItem(USER_KEY, JSON.stringify(safeUser));
+      sessionStorage.setItem(USER_KEY, JSON.stringify(safeUser));
       setUser(safeUser);
       setIsAccessLoading(true);
       try {
@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => {
       if (!prev) return null;
       const updated = { ...prev, ...data };
-      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      sessionStorage.setItem(USER_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);

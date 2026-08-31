@@ -7,7 +7,7 @@ RUN npm ci --ignore-scripts && npm cache clean --force
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49
+FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:45ce1e2e699234253d1def7baa96218a5d00b498d1ba0cbb1a17b6bdf73d1351
 ENV API_UPSTREAM=https://bioguard-api-lkvnq.ondigitalocean.app
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/templates/default.conf.template
